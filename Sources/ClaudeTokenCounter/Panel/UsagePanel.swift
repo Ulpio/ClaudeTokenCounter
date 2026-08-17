@@ -8,7 +8,7 @@ struct UsagePanel: View {
     var body: some View {
         GlassEffectContainer {
             VStack(alignment: .leading, spacing: 14) {
-                riskSection
+                sessionSection
                 valueSection
                 if !snapshot.unknownModels.isEmpty { unknownModelsNotice }
                 footer
@@ -18,21 +18,21 @@ struct UsagePanel: View {
         }
     }
 
-    // MARK: - Risco
+    // MARK: - Sessão
 
-    private var riskSection: some View {
+    private var sessionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("RISCO")
+            sectionTitle("SESSÃO")
 
             if let block = snapshot.activeBlock {
-                gauge(title: "Sessão atual", gauge: block, detail: resetDetail(block))
+                gauge(title: "Atual", gauge: block, detail: resetDetail(block))
             } else {
                 Text("Nenhuma sessão ativa")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
-            gauge(title: "Últimos 7 dias", gauge: snapshot.rollingWeek, detail: "")
+            gauge(title: "Semanal", gauge: snapshot.rollingWeek, detail: "")
 
             if let rate = snapshot.burnRatePerMinute {
                 Text("\(Format.tokens(UInt64(rate)))/min")
@@ -81,7 +81,7 @@ struct UsagePanel: View {
 
     private var valueSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("VALOR — SE FOSSE API")
+            sectionTitle("VALOR")
             HStack(alignment: .top, spacing: 0) {
                 column("HOJE", snapshot.today)
                 column("SEMANA", snapshot.week)

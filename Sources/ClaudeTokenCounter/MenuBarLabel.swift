@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import CCUsageCore
 
@@ -16,7 +17,8 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: "bolt.horizontal")
+            Image(nsImage: ClaudeMark.menuBarImage)
+                .renderingMode(.template)
             if let block = snapshot.activeBlock {
                 Text(Format.percent(block.fraction))
                     .monospacedDigit()
