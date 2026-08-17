@@ -2,11 +2,36 @@ import Foundation
 
 public struct Ceilings: Sendable, Equatable, Codable {
     public var blockTokens: UInt64
-    public var weeklyTokens: UInt64
 
-    public init(blockTokens: UInt64, weeklyTokens: UInt64) {
+    public init(blockTokens: UInt64) {
         self.blockTokens = blockTokens
-        self.weeklyTokens = weeklyTokens
+    }
+}
+
+/// Ritmo da janela corrente comparado ao ritmo típico do usuário.
+///
+/// Substitui o antigo gauge de "% do teto semanal". Aquele denominador era o
+/// maior consumo já observado, o que só funciona com uso estável: em fase de
+/// crescimento o numerador sobe mais rápido que o denominador e a barra vive
+/// estourada — e um indicador sempre no vermelho deixa de ser sinal.
+///
+/// Este não promete limite nenhum. Diz apenas quantas vezes a semana atual é
+/// maior que a mediana das anteriores, e por isso não satura.
+public struct Pace: Sendable, Equatable {
+    public let tokens: UInt64
+    /// Mediana das janelas de 7 dias anteriores.
+    public let typical: UInt64
+
+    public init(tokens: UInt64, typical: UInt64) {
+        self.tokens = tokens
+        self.typical = typical
+    }
+
+    /// `nil` quando ainda não há histórico suficiente para uma referência —
+    /// melhor não mostrar nada do que mostrar um múltiplo sobre quase-zero.
+    public var multiple: Double? {
+        guard typical > 0 else { return nil }
+        return Double(tokens) / Double(typical)
     }
 }
 
@@ -21,7 +46,6 @@ public enum CeilingCalibrator {
     /// Pisos para o primeiro launch, quando ainda não há histórico suficiente.
     /// Existem só para o percentual não dividir por zero.
     static let floorBlockTokens: UInt64 = 1_000_000
-    static let floorWeeklyTokens: UInt64 = 10_000_000
 
     public static func blockCeiling(
         blocks: [UsageBlock], now: Date, lookback: TimeInterval = defaultLookback
@@ -33,46 +57,54 @@ public enum CeilingCalibrator {
             .max() ?? 0
     }
 
-    /// Maior soma em qualquer janela deslizante de 7 dias **inteiramente no
-    /// passado**, por dois ponteiros sobre os eventos ordenados.
+    /// Mediana das janelas de 7 dias que **não se sobrepõem** à janela corrente,
+    /// amostradas uma por dia.
     ///
-    /// Excluir a janela corrente é o análogo de só contar blocos completos em
-    /// `blockCeiling`, e pelo mesmo motivo: com uso em alta a janela corrente é
-    /// sempre a mais pesada já vista, então se ela calibrasse o próprio teto o
-    /// gauge ficaria cravado em 100% e não informaria nada.
-    public static func weeklyCeiling(
+    /// Só janelas sem sobreposição entram: qualquer uma que compartilhe dias com
+    /// a atual deixaria o consumo de agora influenciar a própria referência.
+    /// Mediana em vez de média porque um único dia atípico não deve deslocar o
+    /// que se considera "normal".
+    public static func typicalWeek(
         events: [UsageEvent], now: Date, lookback: TimeInterval = defaultLookback
     ) -> UInt64 {
-        let cutoff = now.addingTimeInterval(-lookback)
         let window: TimeInterval = 7 * 24 * 60 * 60
-        let horizon = now.addingTimeInterval(-window)
+        let day: TimeInterval = 24 * 60 * 60
+        let cutoff = now.addingTimeInterval(-lookback)
         let sorted = events
-            .filter { $0.timestamp >= cutoff && $0.timestamp < horizon }
+            .filter { $0.timestamp >= cutoff }
             .sorted { $0.timestamp < $1.timestamp }
+        guard let firstEvent = sorted.first?.timestamp else { return 0 }
 
-        var best: UInt64 = 0
-        var running: UInt64 = 0
-        var tail = 0
-        for head in sorted.indices {
-            running += sorted[head].totalTokens
-            while sorted[head].timestamp.timeIntervalSince(sorted[tail].timestamp) > window {
+        var samples: [UInt64] = []
+        var end = firstEvent.addingTimeInterval(window)
+        let lastEnd = now.addingTimeInterval(-window)
+        var tail = 0, head = 0, running: UInt64 = 0
+
+        while end <= lastEnd {
+            let start = end.addingTimeInterval(-window)
+            while head < sorted.count, sorted[head].timestamp < end {
+                running += sorted[head].totalTokens
+                head += 1
+            }
+            while tail < head, sorted[tail].timestamp < start {
                 running -= sorted[tail].totalTokens
                 tail += 1
             }
-            best = max(best, running)
+            samples.append(running)
+            end = end.addingTimeInterval(day)
         }
-        return best
+
+        guard !samples.isEmpty else { return 0 }
+        samples.sort()
+        return samples[samples.count / 2]
     }
 
     /// Override manual vence. Sem override, calibra pelo histórico e nunca
     /// devolve zero.
     public static func calibrate(
-        blocks: [UsageBlock], events: [UsageEvent], now: Date, override: Ceilings?
+        blocks: [UsageBlock], now: Date, override: Ceilings?
     ) -> Ceilings {
         if let override { return override }
-        return Ceilings(
-            blockTokens: max(blockCeiling(blocks: blocks, now: now), floorBlockTokens),
-            weeklyTokens: max(weeklyCeiling(events: events, now: now), floorWeeklyTokens)
-        )
+        return Ceilings(blockTokens: max(blockCeiling(blocks: blocks, now: now), floorBlockTokens))
     }
 }

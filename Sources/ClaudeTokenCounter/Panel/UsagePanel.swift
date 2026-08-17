@@ -32,7 +32,7 @@ struct UsagePanel: View {
                     .foregroundStyle(.secondary)
             }
 
-            gauge(title: "Semanal", gauge: snapshot.rollingWeek, detail: "")
+            paceRow(snapshot.weeklyPace)
 
             if let rate = snapshot.burnRatePerMinute {
                 Text("\(Format.tokens(UInt64(rate)))/min")
@@ -55,6 +55,29 @@ struct UsagePanel: View {
             text += " · em \(Format.duration(remaining))"
         }
         return text
+    }
+
+    /// Sem barra, deliberadamente: barra implica um teto, e aqui não há teto a
+    /// prometer — só a comparação com o ritmo habitual.
+    private func paceRow(_ pace: Pace) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text("Semanal").font(.callout)
+                Spacer()
+                if let multiple = pace.multiple {
+                    Text(String(format: "%.1f×", multiple))
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(multiple >= 2 ? .orange : .primary)
+                } else {
+                    Text("—").font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            Text(pace.multiple == nil
+                 ? "\(Format.tokens(pace.tokens)) nos últimos 7 dias"
+                 : "\(Format.tokens(pace.tokens)) · típico \(Format.tokens(pace.typical))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     /// A barra usa a fração saturada; o texto usa a bruta, para não esconder

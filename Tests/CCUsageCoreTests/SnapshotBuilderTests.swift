@@ -23,7 +23,7 @@ private var utc: Calendar {
     let snapshot = SnapshotBuilder.build(
         from: [event("2026-08-17T10:30:00Z", output: 500_000)],
         now: now, calendar: utc,
-        override: Ceilings(blockTokens: 1_000_000, weeklyTokens: 10_000_000))
+        override: Ceilings(blockTokens: 1_000_000))
 
     let block = snapshot.activeBlock!
     #expect(block.resetsAt == date("2026-08-17T15:00:00Z"))
@@ -46,7 +46,7 @@ private var utc: Calendar {
     let snapshot = SnapshotBuilder.build(
         from: [event("2026-08-17T10:30:00Z", output: 5_000_000)],
         now: date("2026-08-17T12:00:00Z"), calendar: utc,
-        override: Ceilings(blockTokens: 1_000_000, weeklyTokens: 10_000_000))
+        override: Ceilings(blockTokens: 1_000_000))
     #expect(snapshot.activeBlock!.fraction == 1.0)
     #expect(snapshot.activeBlock!.rawFraction == 5.0)
 }

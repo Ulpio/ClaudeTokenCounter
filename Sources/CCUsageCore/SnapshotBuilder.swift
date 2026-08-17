@@ -13,7 +13,7 @@ public enum SnapshotBuilder {
 
         let blocks = BlockBuilder.blocks(from: events, calendar: calendar)
         let ceilings = CeilingCalibrator.calibrate(
-            blocks: blocks, events: events, now: now, override: override)
+            blocks: blocks, now: now, override: override)
 
         let aggregator = PeriodAggregator(calendar: calendar)
         let today = aggregator.totals(from: events, in: aggregator.todayInterval(now: now))
@@ -40,8 +40,9 @@ public enum SnapshotBuilder {
 
         return UsageSnapshot(
             activeBlock: blockGauge,
-            rollingWeek: UsageSnapshot.Gauge(
-                tokens: rolling.tokens, ceiling: ceilings.weeklyTokens, resetsAt: nil),
+            weeklyPace: Pace(
+                tokens: rolling.tokens,
+                typical: CeilingCalibrator.typicalWeek(events: events, now: now)),
             today: today, week: week, month: month,
             burnRatePerMinute: burnRate,
             unknownModels: unknown,

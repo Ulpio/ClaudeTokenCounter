@@ -36,7 +36,7 @@ public struct UsageSnapshot: Sendable, Equatable {
     }
 
     public let activeBlock: Gauge?
-    public let rollingWeek: Gauge
+    public let weeklyPace: Pace
     public let today: Totals
     public let week: Totals
     public let month: Totals
@@ -47,12 +47,12 @@ public struct UsageSnapshot: Sendable, Equatable {
     public let generatedAt: Date
 
     public init(
-        activeBlock: Gauge?, rollingWeek: Gauge,
+        activeBlock: Gauge?, weeklyPace: Pace,
         today: Totals, week: Totals, month: Totals,
         burnRatePerMinute: Double?, unknownModels: Set<String>, generatedAt: Date
     ) {
         self.activeBlock = activeBlock
-        self.rollingWeek = rollingWeek
+        self.weeklyPace = weeklyPace
         self.today = today
         self.week = week
         self.month = month
@@ -63,7 +63,7 @@ public struct UsageSnapshot: Sendable, Equatable {
 
     public static func empty(at now: Date) -> UsageSnapshot {
         UsageSnapshot(activeBlock: nil,
-                      rollingWeek: Gauge(tokens: 0, ceiling: 1, resetsAt: nil),
+                      weeklyPace: Pace(tokens: 0, typical: 0),
                       today: .zero, week: .zero, month: .zero,
                       burnRatePerMinute: nil, unknownModels: [], generatedAt: now)
     }
