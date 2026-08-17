@@ -56,15 +56,31 @@ public final class AppSettings {
         didSet { save() }
     }
 
+    /// Plano lido do keychain, quando disponível. Exposto mesmo quando o
+    /// usuário escolheu outro: a divergência é informação, não erro — a
+    /// detecção pode estar desatualizada depois de um upgrade de plano.
+    public private(set) var detectedPlan: Plan?
+
     @ObservationIgnored private let defaults: UserDefaults
 
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard,
+                detectPlan: () -> Plan? = { PlanDetector.detect() }) {
         self.defaults = defaults
         let stored = defaults.data(forKey: Self.storageKey)
             .flatMap { try? JSONDecoder().decode(Payload.self, from: $0) }
-        // Payload corrompido não pode impedir o app de abrir.
-        self.plan = stored?.plan ?? .max20
+        let detected = detectPlan()
+        self.detectedPlan = detected
+        // Escolha explícita vence a detecção, que vence o default. Payload
+        // corrompido não pode impedir o app de abrir.
+        self.plan = stored?.plan ?? detected ?? .max20
         self.manualBlockCeiling = stored?.manualBlockCeiling
+    }
+
+    /// `true` quando a detecção discorda do que está selecionado — a UI avisa
+    /// em vez de trocar por baixo do usuário.
+    public var planDisagreesWithDetection: Bool {
+        guard let detectedPlan else { return false }
+        return detectedPlan != plan
     }
 
     public var ceilingOverride: Ceilings? {

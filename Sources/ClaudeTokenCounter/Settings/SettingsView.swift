@@ -18,6 +18,20 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.inline)
+                if let detected = settings.detectedPlan {
+                    Label(settings.planDisagreesWithDetection
+                          ? "Sua conta indica \(detected.label) — seleção manual está sobrescrevendo."
+                          : "Detectado automaticamente pela sua conta.",
+                          systemImage: settings.planDisagreesWithDetection
+                          ? "exclamationmark.triangle" : "checkmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(settings.planDisagreesWithDetection
+                                         ? UsageColor.warning : .secondary)
+                } else {
+                    Text("Não foi possível ler o plano da sua conta — selecione manualmente.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Text("Usado só para o múltiplo de retorno na seção Valor.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

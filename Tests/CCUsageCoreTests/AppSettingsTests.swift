@@ -22,9 +22,11 @@ private func freshDefaults() -> UserDefaults {
     #expect(Plan.max20.returnMultiple(forMonthly: .zero) == nil)
 }
 
+/// Detector neutralizado de propósito: sem isso o teste lê o keychain real,
+/// depende do plano de quem executa e paga o custo do prompt.
 @MainActor
 @Test func defaultsToMax20WithAutomaticCeiling() {
-    let settings = AppSettings(defaults: freshDefaults())
+    let settings = AppSettings(defaults: freshDefaults(), detectPlan: { nil })
     #expect(settings.plan == .max20)
     #expect(settings.manualBlockCeiling == nil)
     #expect(settings.ceilingOverride == nil)
@@ -33,18 +35,18 @@ private func freshDefaults() -> UserDefaults {
 @MainActor
 @Test func settingsSurviveARestart() {
     let defaults = freshDefaults()
-    let first = AppSettings(defaults: defaults)
+    let first = AppSettings(defaults: defaults, detectPlan: { nil })
     first.plan = .max5
     first.manualBlockCeiling = 500_000
 
-    let restarted = AppSettings(defaults: defaults)
+    let restarted = AppSettings(defaults: defaults, detectPlan: { nil })
     #expect(restarted.plan == .max5)
     #expect(restarted.manualBlockCeiling == 500_000)
 }
 
 @MainActor
 @Test func manualCeilingBecomesAnOverrideAndAutomaticClearsIt() {
-    let settings = AppSettings(defaults: freshDefaults())
+    let settings = AppSettings(defaults: freshDefaults(), detectPlan: { nil })
     settings.manualBlockCeiling = 214_400_000
     #expect(settings.ceilingOverride == Ceilings(blockTokens: 214_400_000))
 
@@ -57,6 +59,6 @@ private func freshDefaults() -> UserDefaults {
     // Payload inválido não pode impedir o app de abrir.
     let defaults = freshDefaults()
     defaults.set(Data("não é json".utf8), forKey: AppSettings.storageKey)
-    let settings = AppSettings(defaults: defaults)
+    let settings = AppSettings(defaults: defaults, detectPlan: { nil })
     #expect(settings.plan == .max20)
 }
