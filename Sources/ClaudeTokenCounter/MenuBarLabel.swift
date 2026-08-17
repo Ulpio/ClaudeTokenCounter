@@ -17,7 +17,7 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(nsImage: ClaudeMark.menuBarImage)
+            Image(nsImage: ClawdMark.menuBarImage)
                 .renderingMode(.template)
             if let block = snapshot.activeBlock {
                 Text(Format.percent(block.fraction))
