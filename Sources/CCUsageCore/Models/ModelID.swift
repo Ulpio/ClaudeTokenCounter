@@ -2,7 +2,7 @@
 ///
 /// Os casos `4x` colapsam gerações que compartilham exatamente a mesma tabela
 /// de preços — separá-las não mudaria nenhum número.
-public enum ModelID: Hashable, Sendable {
+public enum ModelID: Hashable, Sendable, Codable {
     case opus5
     case opus4x      // Opus 4.5 / 4.6 / 4.7 / 4.8 — todos $5/$25
     case sonnet5

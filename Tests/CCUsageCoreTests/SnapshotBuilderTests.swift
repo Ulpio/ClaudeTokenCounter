@@ -40,12 +40,15 @@ private var utc: Calendar {
     #expect(snapshot.activeBlock == nil)
 }
 
-@Test func fractionIsClampedAtOne() {
+@Test func barIsClampedButTheNumberTellsTheTruth() {
+    // 5M contra teto de 1M: a barra satura em 100%, mas o texto precisa dizer
+    // 500% — é justamente aí que o número informa algo.
     let snapshot = SnapshotBuilder.build(
         from: [event("2026-08-17T10:30:00Z", output: 5_000_000)],
         now: date("2026-08-17T12:00:00Z"), calendar: utc,
         override: Ceilings(blockTokens: 1_000_000, weeklyTokens: 10_000_000))
     #expect(snapshot.activeBlock!.fraction == 1.0)
+    #expect(snapshot.activeBlock!.rawFraction == 5.0)
 }
 
 @Test func periodTotalsArePopulated() {

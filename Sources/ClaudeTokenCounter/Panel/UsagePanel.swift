@@ -25,14 +25,14 @@ struct UsagePanel: View {
             sectionTitle("RISCO")
 
             if let block = snapshot.activeBlock {
-                gauge(title: "Sessão atual", fraction: block.fraction, detail: resetDetail(block))
+                gauge(title: "Sessão atual", gauge: block, detail: resetDetail(block))
             } else {
                 Text("Nenhuma sessão ativa")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
-            gauge(title: "Últimos 7 dias", fraction: snapshot.rollingWeek.fraction, detail: "")
+            gauge(title: "Últimos 7 dias", gauge: snapshot.rollingWeek, detail: "")
 
             if let rate = snapshot.burnRatePerMinute {
                 Text("\(Format.tokens(UInt64(rate)))/min")
@@ -57,12 +57,17 @@ struct UsagePanel: View {
         return text
     }
 
-    private func gauge(title: String, fraction: Double, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    /// A barra usa a fração saturada; o texto usa a bruta, para não esconder
+    /// que o consumo passou do maior já observado.
+    private func gauge(title: String, gauge g: UsageSnapshot.Gauge, detail: String) -> some View {
+        let fraction = g.fraction
+        return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title).font(.callout)
                 Spacer()
-                Text(Format.percent(fraction)).font(.callout.monospacedDigit())
+                Text(Format.percent(g.rawFraction))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(g.rawFraction > 1 ? .orange : .primary)
             }
             ProgressView(value: fraction)
                 .tint(fraction >= 0.85 ? .red : (fraction >= 0.6 ? .orange : .accentColor))

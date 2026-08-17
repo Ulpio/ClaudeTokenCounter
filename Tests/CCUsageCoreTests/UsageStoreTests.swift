@@ -32,6 +32,26 @@ private func makeRootWithOneEvent() throws -> URL {
 }
 
 @MainActor
+@Test func historySurvivesARestart() async throws {
+    // Regressão: o cache guardava só os offsets de leitura. No segundo launch
+    // o ingest devolvia zero eventos ("tudo já lido") e o app acordava sem
+    // histórico — tetos no piso e todos os gauges cravados em 100%.
+    let root = try makeRootWithOneEvent()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let cacheURL = root.appending(path: "cache.json")
+
+    let first = UsageStore(scanner: ProjectScanner(root: root), cacheURL: cacheURL)
+    await first.refresh()
+    #expect(first.snapshot.today.tokens == 1234)
+
+    // Processo novo, mesmo cache, nenhum arquivo novo no disco.
+    let restarted = UsageStore(scanner: ProjectScanner(root: root), cacheURL: cacheURL)
+    restarted.start()
+    #expect(restarted.snapshot.today.tokens == 1234)
+    restarted.stop()
+}
+
+@MainActor
 @Test func refreshIsIdempotentAcrossRuns() async throws {
     let root = try makeRootWithOneEvent()
     defer { try? FileManager.default.removeItem(at: root) }

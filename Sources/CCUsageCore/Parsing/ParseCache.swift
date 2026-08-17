@@ -13,12 +13,19 @@ public struct FileState: Codable, Sendable, Equatable {
     }
 }
 
-/// Estado de leitura por arquivo, para que só o delta seja reparseado.
+/// Estado persistido entre execuções: até onde cada arquivo foi lido **e** os
+/// eventos que essa leitura produziu.
+///
+/// Guardar só os offsets seria pior que não guardar nada: no segundo launch o
+/// `ingest` devolveria zero eventos (tudo "já lido") e o app acordaria sem
+/// histórico nenhum, com os tetos caindo no piso e todos os gauges saturados.
 public struct ParseCache: Codable, Sendable, Equatable {
     public var files: [String: FileState]
+    public var events: [UsageEvent]
 
-    public init(files: [String: FileState] = [:]) {
+    public init(files: [String: FileState] = [:], events: [UsageEvent] = []) {
         self.files = files
+        self.events = events
     }
 
     public static func load(from url: URL) -> ParseCache {

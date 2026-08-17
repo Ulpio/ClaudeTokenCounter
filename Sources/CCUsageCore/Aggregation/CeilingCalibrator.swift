@@ -33,15 +33,21 @@ public enum CeilingCalibrator {
             .max() ?? 0
     }
 
-    /// Maior soma em qualquer janela deslizante de 7 dias, por dois ponteiros
-    /// sobre os eventos ordenados.
+    /// Maior soma em qualquer janela deslizante de 7 dias **inteiramente no
+    /// passado**, por dois ponteiros sobre os eventos ordenados.
+    ///
+    /// Excluir a janela corrente é o análogo de só contar blocos completos em
+    /// `blockCeiling`, e pelo mesmo motivo: com uso em alta a janela corrente é
+    /// sempre a mais pesada já vista, então se ela calibrasse o próprio teto o
+    /// gauge ficaria cravado em 100% e não informaria nada.
     public static func weeklyCeiling(
         events: [UsageEvent], now: Date, lookback: TimeInterval = defaultLookback
     ) -> UInt64 {
         let cutoff = now.addingTimeInterval(-lookback)
         let window: TimeInterval = 7 * 24 * 60 * 60
+        let horizon = now.addingTimeInterval(-window)
         let sorted = events
-            .filter { $0.timestamp >= cutoff }
+            .filter { $0.timestamp >= cutoff && $0.timestamp < horizon }
             .sorted { $0.timestamp < $1.timestamp }
 
         var best: UInt64 = 0

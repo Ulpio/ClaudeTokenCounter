@@ -1,7 +1,7 @@
 import Foundation
 
 /// Uma mensagem assistant com uso de token, extraída de uma linha do JSONL.
-public struct UsageEvent: Sendable, Equatable {
+public struct UsageEvent: Sendable, Equatable, Codable {
     public let timestamp: Date
     public let model: ModelID
     /// `message.usage.speed == "fast"` — fast mode custa o dobro no Opus 5.

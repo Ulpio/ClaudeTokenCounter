@@ -58,12 +58,28 @@ public final class UsageStore {
         for event in result.events where seenKeys.insert(event.dedupeKey).inserted {
             events.append(event)
         }
+
+        // Descarta o que já saiu da janela de interesse, senão o arquivo de
+        // cache cresce sem limite.
+        let horizon = Date().addingTimeInterval(-lookback)
+        if events.contains(where: { $0.timestamp < horizon }) {
+            events.removeAll { $0.timestamp < horizon }
+            seenKeys = Set(events.map(\.dedupeKey))
+        }
+
+        self.cache.events = events
         try? self.cache.save(to: cacheURL)
         rebuild()
     }
 
     public func start() {
         cache = ParseCache.load(from: cacheURL)
+        // Restaura o histórico antes de tocar no disco: o painel abre com dados
+        // completos em vez de esperar os segundos da varredura.
+        events = cache.events
+        seenKeys = Set(events.map(\.dedupeKey))
+        rebuild()
+
         Task { await refresh() }
 
         watcher = FSWatcher(url: scanner.root) { [weak self] in

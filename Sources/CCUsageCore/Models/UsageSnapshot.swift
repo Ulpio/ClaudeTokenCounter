@@ -14,10 +14,19 @@ public struct UsageSnapshot: Sendable, Equatable {
             self.resetsAt = resetsAt
         }
 
-        /// 0…1, saturado em 1 — o teto é estimado e pode ser ultrapassado.
+        /// 0…1, saturado em 1. Para a barra de progresso, que não pode encher
+        /// além do fim.
         public var fraction: Double {
             guard ceiling > 0 else { return 0 }
-            return min(1.0, Double(tokens) / Double(ceiling))
+            return min(1.0, rawFraction)
+        }
+
+        /// Razão real, sem saturação. Passa de 1 quando o consumo supera o
+        /// maior já observado — e é exatamente aí que o número importa: "140%"
+        /// diz que você está em território inédito, "100%" esconde isso.
+        public var rawFraction: Double {
+            guard ceiling > 0 else { return 0 }
+            return Double(tokens) / Double(ceiling)
         }
 
         public func timeRemaining(at now: Date) -> TimeInterval? {

@@ -49,6 +49,17 @@ private func event(_ iso: String, output: UInt32) -> UsageEvent {
                                             now: date("2026-08-25T00:00:00Z")) == 300)
 }
 
+@Test func currentWindowDoesNotDefineItsOwnCeiling() {
+    // Regressão: com uso em alta a janela corrente é a mais pesada de todas.
+    // Se ela calibrasse o próprio teto, o gauge ficaria cravado em 100%.
+    let now = date("2026-08-25T00:00:00Z")
+    let events = [
+        event("2026-08-01T00:00:00Z", output: 100),    // janela inteiramente passada
+        event("2026-08-24T00:00:00Z", output: 9_000),  // janela corrente, muito maior
+    ]
+    #expect(CeilingCalibrator.weeklyCeiling(events: events, now: now) == 100)
+}
+
 @Test func manualOverrideWins() {
     let now = date("2026-08-17T20:00:00Z")
     let ceilings = CeilingCalibrator.calibrate(
