@@ -4,6 +4,7 @@ import CCUsageCore
 
 struct UsagePanel: View {
     let snapshot: UsageSnapshot
+    let plan: Plan
 
     var body: some View {
         GlassEffectContainer {
@@ -106,9 +107,34 @@ struct UsagePanel: View {
                 column("SEMANA", snapshot.week)
                 column("MÊS", snapshot.month)
             }
+            returnRow
         }
         .padding(12)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
+    }
+
+    /// Quanto o valor equivalente de API do mês cobre a mensalidade. Some
+    /// enquanto não há consumo: "0×" no dia 1 não informa nada.
+    @ViewBuilder
+    private var returnRow: some View {
+        if let multiple = plan.returnMultiple(forMonthly: snapshot.month.money) {
+            Divider()
+            HStack(spacing: 4) {
+                Text("\(plan.label) · \(Format.planPrice(plan))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                // Herda o "+" do total parcial: um piso não pode ser
+                // apresentado como número exato.
+                Text(String(format: "%.1f×", multiple)
+                     + (snapshot.month.money.isPartial ? "+" : ""))
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(multiple >= 1 ? UsageColor.calm : .secondary)
+                Text("de retorno")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func column(_ title: String, _ totals: Totals) -> some View {
@@ -138,6 +164,12 @@ struct UsagePanel: View {
 
     private var footer: some View {
         HStack {
+            SettingsLink {
+                Label("Ajustes", systemImage: "gearshape")
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .foregroundStyle(.secondary)
             Spacer()
             Button("Sair") { NSApplication.shared.terminate(nil) }
                 .buttonStyle(.plain)

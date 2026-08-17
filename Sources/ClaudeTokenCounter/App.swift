@@ -12,19 +12,35 @@ struct ClaudeTokenCounterApp: App {
     /// macro *está* no CLT), que rastreia o acesso à propriedade dentro do
     /// `body` — independentemente de como a referência é guardada.
     @MainActor private static let store = UsageStore()
+    @MainActor private static let settings = AppSettings()
+    @MainActor private static let loginItem = LoginItem()
+    @MainActor private static let form = SettingsFormState()
 
     init() {
         // A varredura inicial roda em task destacada, então a menu bar aparece
         // imediatamente e o painel preenche quando o disco termina de ser lido.
+        Self.store.ceilingOverride = Self.settings.ceilingOverride
         Self.store.start()
     }
 
     var body: some Scene {
         MenuBarExtra {
-            UsagePanel(snapshot: Self.store.snapshot)
+            UsagePanel(snapshot: Self.store.snapshot, plan: Self.settings.plan)
         } label: {
             MenuBarLabel(snapshot: Self.store.snapshot)
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView(settings: Self.settings,
+                         form: Self.form,
+                         loginItem: Self.loginItem,
+                         calibratedCeiling: Self.store.snapshot.session.ceiling)
+                // O store é a única fonte do denominador; as settings só
+                // publicam a intenção do usuário e esta ponte a aplica.
+                .onChange(of: Self.settings.ceilingOverride) { _, override in
+                    Self.store.ceilingOverride = override
+                }
+        }
     }
 }

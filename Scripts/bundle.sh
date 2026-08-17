@@ -46,3 +46,15 @@ echo "==> Ad-hoc signing"
 codesign --force --deep --sign - "$APP"
 
 echo "==> Done: $APP"
+
+# `--install` copia para /Applications. O launch at login precisa disso: o
+# SMAppService registra um caminho, e um app que vive em dist/ tem o binário
+# trocado a cada rebuild — o login item passaria a apontar para lixo.
+if [ "${1:-}" = "--install" ]; then
+    TARGET="/Applications/$APP_NAME.app"
+    echo "==> Installing to $TARGET"
+    rm -rf "$TARGET"
+    cp -R "$APP" "$TARGET"
+    codesign --force --deep --sign - "$TARGET"
+    echo "==> Installed: $TARGET"
+fi

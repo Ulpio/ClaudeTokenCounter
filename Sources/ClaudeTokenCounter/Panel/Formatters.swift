@@ -35,6 +35,15 @@ enum Format {
         date.formatted(date: .omitted, time: .shortened)
     }
 
+    static func planPrice(_ plan: Plan) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.maximumFractionDigits = 0
+        let value = formatter.string(from: NSDecimalNumber(decimal: plan.monthlyPrice)) ?? ""
+        return "\(value)/mês"
+    }
+
     static func percent(_ fraction: Double) -> String {
         "\(Int(fraction * 100))%"
     }
