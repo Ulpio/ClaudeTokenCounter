@@ -24,13 +24,9 @@ struct UsagePanel: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("SESSÃO")
 
-            if let block = snapshot.activeBlock {
-                gauge(title: "Atual", gauge: block, detail: resetDetail(block))
-            } else {
-                Text("Nenhuma sessão ativa")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
+            gauge(title: "Atual",
+                  gauge: snapshot.session,
+                  detail: resetDetail(snapshot.session))
 
             paceRow(snapshot.weeklyPace)
 
@@ -49,7 +45,7 @@ struct UsagePanel: View {
     }
 
     private func resetDetail(_ block: UsageSnapshot.Gauge) -> String {
-        guard let resetsAt = block.resetsAt else { return "" }
+        guard let resetsAt = block.resetsAt else { return "nenhuma sessão ativa" }
         var text = "reseta \(Format.clockTime(resetsAt))"
         if let remaining = block.timeRemaining(at: snapshot.generatedAt) {
             text += " · em \(Format.duration(remaining))"
@@ -67,7 +63,7 @@ struct UsagePanel: View {
                 if let multiple = pace.multiple {
                     Text(String(format: "%.1f×", multiple))
                         .font(.callout.monospacedDigit())
-                        .foregroundStyle(multiple >= 2 ? .orange : .primary)
+                        .foregroundStyle(multiple >= 2 ? UsageColor.warning : .primary)
                 } else {
                     Text("—").font(.callout).foregroundStyle(.secondary)
                 }
@@ -90,10 +86,10 @@ struct UsagePanel: View {
                 Spacer()
                 Text(Format.percent(g.rawFraction))
                     .font(.callout.monospacedDigit())
-                    .foregroundStyle(g.rawFraction > 1 ? .orange : .primary)
+                    .foregroundStyle(g.rawFraction > 1 ? UsageColor.critical : .primary)
             }
             ProgressView(value: fraction)
-                .tint(fraction >= 0.85 ? .red : (fraction >= 0.6 ? .orange : .accentColor))
+                .tint(UsageColor.bar(fraction))
             if !detail.isEmpty {
                 Text(detail).font(.caption).foregroundStyle(.secondary)
             }

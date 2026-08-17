@@ -35,7 +35,10 @@ public struct UsageSnapshot: Sendable, Equatable {
         }
     }
 
-    public let activeBlock: Gauge?
+    /// Sempre presente. Quando não há sessão em curso vem zerado e com
+    /// `resetsAt == nil` — a UI continua desenhando a barra vazia em vez de
+    /// trocar de layout, porque um medidor que some é pior que um medidor a zero.
+    public let session: Gauge
     public let weeklyPace: Pace
     public let today: Totals
     public let week: Totals
@@ -47,11 +50,11 @@ public struct UsageSnapshot: Sendable, Equatable {
     public let generatedAt: Date
 
     public init(
-        activeBlock: Gauge?, weeklyPace: Pace,
+        session: Gauge, weeklyPace: Pace,
         today: Totals, week: Totals, month: Totals,
         burnRatePerMinute: Double?, unknownModels: Set<String>, generatedAt: Date
     ) {
-        self.activeBlock = activeBlock
+        self.session = session
         self.weeklyPace = weeklyPace
         self.today = today
         self.week = week
@@ -62,7 +65,7 @@ public struct UsageSnapshot: Sendable, Equatable {
     }
 
     public static func empty(at now: Date) -> UsageSnapshot {
-        UsageSnapshot(activeBlock: nil,
+        UsageSnapshot(session: Gauge(tokens: 0, ceiling: 1, resetsAt: nil),
                       weeklyPace: Pace(tokens: 0, typical: 0),
                       today: .zero, week: .zero, month: .zero,
                       burnRatePerMinute: nil, unknownModels: [], generatedAt: now)

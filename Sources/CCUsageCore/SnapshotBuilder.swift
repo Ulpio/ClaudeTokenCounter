@@ -23,9 +23,12 @@ public enum SnapshotBuilder {
 
         let active = blocks.last { $0.isActive(at: now) }
 
-        let blockGauge = active.map {
-            UsageSnapshot.Gauge(tokens: $0.tokens, ceiling: ceilings.blockTokens, resetsAt: $0.end)
-        }
+        // Sem bloco ativo o medidor vem zerado, não ausente: acabou de resetar
+        // é justamente quando "0% de quanto" informa mais.
+        let sessionGauge = UsageSnapshot.Gauge(
+            tokens: active?.tokens ?? 0,
+            ceiling: ceilings.blockTokens,
+            resetsAt: active?.end)
 
         let burnRate: Double? = active.flatMap { block in
             let elapsedMinutes = now.timeIntervalSince(block.start) / 60
@@ -39,7 +42,7 @@ public enum SnapshotBuilder {
         }
 
         return UsageSnapshot(
-            activeBlock: blockGauge,
+            session: sessionGauge,
             weeklyPace: Pace(
                 tokens: rolling.tokens,
                 typical: CeilingCalibrator.typicalWeek(events: events, now: now)),

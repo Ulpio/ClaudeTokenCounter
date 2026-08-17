@@ -28,7 +28,7 @@ private func makeRootWithOneEvent() throws -> URL {
     await store.refresh()
 
     #expect(store.snapshot.today.tokens == 1234)
-    #expect(store.snapshot.activeBlock != nil)
+    #expect(store.snapshot.session.resetsAt != nil)
 }
 
 @MainActor

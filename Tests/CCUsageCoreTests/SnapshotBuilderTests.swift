@@ -25,7 +25,7 @@ private var utc: Calendar {
         now: now, calendar: utc,
         override: Ceilings(blockTokens: 1_000_000))
 
-    let block = snapshot.activeBlock!
+    let block = snapshot.session
     #expect(block.resetsAt == date("2026-08-17T15:00:00Z"))
     #expect(block.fraction == 0.5)
     // Tipo explícito: `#expect` compara Optional<Double> com Int sem erro de
@@ -33,11 +33,17 @@ private var utc: Calendar {
     #expect(block.timeRemaining(at: now) == TimeInterval(3 * 60 * 60))
 }
 
-@Test func noRecentActivityMeansNoActiveBlock() {
+@Test func idleSessionKeepsTheGaugeAtZeroInsteadOfRemovingIt() {
+    // Acabou de resetar é justamente quando "0% de quanto" informa mais: a
+    // barra continua existindo, zerada e sem horário de reset.
     let snapshot = SnapshotBuilder.build(
         from: [event("2026-08-10T10:00:00Z")],
         now: date("2026-08-17T12:00:00Z"), calendar: utc, override: nil)
-    #expect(snapshot.activeBlock == nil)
+    #expect(snapshot.session.resetsAt == nil)
+    #expect(snapshot.session.tokens == 0)
+    #expect(snapshot.session.fraction == 0)
+    #expect(snapshot.session.ceiling > 0)   // denominador definido mesmo ocioso
+    #expect(snapshot.burnRatePerMinute == nil)
 }
 
 @Test func barIsClampedButTheNumberTellsTheTruth() {
@@ -47,8 +53,8 @@ private var utc: Calendar {
         from: [event("2026-08-17T10:30:00Z", output: 5_000_000)],
         now: date("2026-08-17T12:00:00Z"), calendar: utc,
         override: Ceilings(blockTokens: 1_000_000))
-    #expect(snapshot.activeBlock!.fraction == 1.0)
-    #expect(snapshot.activeBlock!.rawFraction == 5.0)
+    #expect(snapshot.session.fraction == 1.0)
+    #expect(snapshot.session.rawFraction == 5.0)
 }
 
 @Test func periodTotalsArePopulated() {
@@ -79,7 +85,7 @@ private var utc: Calendar {
 @Test func emptyHistoryProducesAnEmptySnapshot() {
     let snapshot = SnapshotBuilder.build(
         from: [], now: date("2026-08-17T12:00:00Z"), calendar: utc, override: nil)
-    #expect(snapshot.activeBlock == nil)
+    #expect(snapshot.session.resetsAt == nil)
     #expect(snapshot.today == .zero)
     #expect(snapshot.unknownModels.isEmpty)
 }
