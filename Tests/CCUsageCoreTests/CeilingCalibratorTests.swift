@@ -70,7 +70,7 @@ private let steadyAugust = (1...31).map {
     // Mediana, não média: um dia atípico no meio da rotina não redefine o que
     // conta como normal.
     var events = steadyAugust
-    events.append(event("2026-08-15T18:00:00Z", output: 1_000_000))
+    events.append(event("2026-08-20T18:00:00Z", output: 1_000_000))
     #expect(CeilingCalibrator.typicalWeek(events: events,
                                           now: date("2026-09-15T12:00:00Z")) == 700)
 }
@@ -81,6 +81,16 @@ private let steadyAugust = (1...31).map {
     var events = steadyAugust
     events.append(event("2026-09-14T12:00:00Z", output: 1_000_000))
     #expect(CeilingCalibrator.typicalWeek(events: events,
+                                          now: date("2026-09-15T12:00:00Z")) == 700)
+}
+
+@Test func typicalWeekIgnoresHistoryOlderThanThirtyDays() {
+    // Um período antigo e pesado não descreve o ritmo atual: pode ser outro
+    // projeto, outra fase. A referência olha só os últimos 30 dias.
+    let ancient = (1...31).map {
+        event(String(format: "2026-05-%02dT12:00:00Z", $0), output: 10_000)
+    }
+    #expect(CeilingCalibrator.typicalWeek(events: ancient + steadyAugust,
                                           now: date("2026-09-15T12:00:00Z")) == 700)
 }
 

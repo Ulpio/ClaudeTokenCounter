@@ -43,6 +43,15 @@ public struct Pace: Sendable, Equatable {
 public enum CeilingCalibrator {
     public static let defaultLookback: TimeInterval = 90 * 24 * 60 * 60
 
+    /// A semana típica olha uma janela mais curta que o teto do bloco.
+    ///
+    /// São perguntas diferentes: o teto de 5h quer o maior pico já alcançado,
+    /// e quanto mais histórico melhor. A semana típica quer "o que é normal
+    /// **para você agora**" — e três meses atrás pode ser outra pessoa, com
+    /// outro projeto e outro ritmo. Trinta dias acompanham mudança de patamar
+    /// em vez de ancorar a referência num passado que já não descreve o uso.
+    public static let paceLookback: TimeInterval = 30 * 24 * 60 * 60
+
     /// Pisos para o primeiro launch, quando ainda não há histórico suficiente.
     /// Existem só para o percentual não dividir por zero.
     static let floorBlockTokens: UInt64 = 1_000_000
@@ -65,7 +74,7 @@ public enum CeilingCalibrator {
     /// Mediana em vez de média porque um único dia atípico não deve deslocar o
     /// que se considera "normal".
     public static func typicalWeek(
-        events: [UsageEvent], now: Date, lookback: TimeInterval = defaultLookback
+        events: [UsageEvent], now: Date, lookback: TimeInterval = paceLookback
     ) -> UInt64 {
         let window: TimeInterval = 7 * 24 * 60 * 60
         let day: TimeInterval = 24 * 60 * 60
