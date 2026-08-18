@@ -3,42 +3,56 @@ import Foundation
 /// Tudo que a UI precisa desenhar, já calculado. Nenhuma shell conhece JSONL,
 /// bloco ou preço — só recebe isto.
 public struct UsageSnapshot: Sendable, Equatable {
+    /// Um medidor de janela. Pode vir da leitura oficial do Claude Code ou da
+    /// derivação local — e sabe qual dos dois é, porque a UI precisa dizer.
     public struct Gauge: Sendable, Equatable {
-        public let tokens: UInt64
-        public let ceiling: UInt64
-        public let resetsAt: Date?
-
-        public init(tokens: UInt64, ceiling: UInt64, resetsAt: Date?) {
-            self.tokens = tokens
-            self.ceiling = ceiling
-            self.resetsAt = resetsAt
-        }
-
-        /// 0…1, saturado em 1. Para a barra de progresso, que não pode encher
-        /// além do fim.
-        public var fraction: Double {
-            guard ceiling > 0 else { return 0 }
-            return min(1.0, rawFraction)
-        }
-
         /// Razão real, sem saturação. Passa de 1 quando o consumo supera o
-        /// maior já observado — e é exatamente aí que o número importa: "140%"
-        /// diz que você está em território inédito, "100%" esconde isso.
-        public var rawFraction: Double {
-            guard ceiling > 0 else { return 0 }
-            return Double(tokens) / Double(ceiling)
-        }
+        /// denominador — e é aí que o número mais informa.
+        public let rawFraction: Double
+        public let resetsAt: Date?
+        /// Preenchido só no caminho oficial: quando o Claude Code buscou o dado.
+        public let officialFetchedAt: Date?
+        /// Tokens e teto existem apenas no caminho derivado; o oficial devolve
+        /// percentual pronto e não expõe os absolutos.
+        public let tokens: UInt64?
+        public let ceiling: UInt64?
+
+        public var isOfficial: Bool { officialFetchedAt != nil }
+
+        /// Saturada em 1, para a barra de progresso — que não pode encher além
+        /// do fim.
+        public var fraction: Double { min(1.0, rawFraction) }
 
         public func timeRemaining(at now: Date) -> TimeInterval? {
             guard let resetsAt else { return nil }
             return max(0, resetsAt.timeIntervalSince(now))
         }
+
+        /// Há quanto tempo o dado oficial foi buscado. O cache só se move quando
+        /// o Claude Code roda, então a idade é parte do dado.
+        public func age(at now: Date) -> TimeInterval? {
+            officialFetchedAt.map { now.timeIntervalSince($0) }
+        }
+
+        public static func official(fraction: Double, resetsAt: Date?, fetchedAt: Date) -> Gauge {
+            Gauge(rawFraction: fraction, resetsAt: resetsAt, officialFetchedAt: fetchedAt,
+                  tokens: nil, ceiling: nil)
+        }
+
+        public static func derived(tokens: UInt64, ceiling: UInt64, resetsAt: Date?) -> Gauge {
+            Gauge(rawFraction: ceiling > 0 ? Double(tokens) / Double(ceiling) : 0,
+                  resetsAt: resetsAt, officialFetchedAt: nil,
+                  tokens: tokens, ceiling: ceiling)
+        }
     }
 
-    /// Sempre presente. Quando não há sessão em curso vem zerado e com
-    /// `resetsAt == nil` — a UI continua desenhando a barra vazia em vez de
-    /// trocar de layout, porque um medidor que some é pior que um medidor a zero.
+    /// Sempre presente. Sem sessão em curso vem zerado e com `resetsAt` nulo —
+    /// a UI continua desenhando a barra vazia em vez de trocar de layout.
     public let session: Gauge
+    /// Só existe com leitura oficial: a janela semanal da Anthropic tem reset
+    /// próprio, que não dá para derivar do histórico local.
+    public let weekly: Gauge?
+    /// Comparação com o ritmo típico. Usada quando não há semanal oficial.
     public let weeklyPace: Pace
     public let today: Totals
     public let week: Totals
@@ -50,11 +64,12 @@ public struct UsageSnapshot: Sendable, Equatable {
     public let generatedAt: Date
 
     public init(
-        session: Gauge, weeklyPace: Pace,
+        session: Gauge, weekly: Gauge?, weeklyPace: Pace,
         today: Totals, week: Totals, month: Totals,
         burnRatePerMinute: Double?, unknownModels: Set<String>, generatedAt: Date
     ) {
         self.session = session
+        self.weekly = weekly
         self.weeklyPace = weeklyPace
         self.today = today
         self.week = week
@@ -65,7 +80,8 @@ public struct UsageSnapshot: Sendable, Equatable {
     }
 
     public static func empty(at now: Date) -> UsageSnapshot {
-        UsageSnapshot(session: Gauge(tokens: 0, ceiling: 1, resetsAt: nil),
+        UsageSnapshot(session: .derived(tokens: 0, ceiling: 1, resetsAt: nil),
+                      weekly: nil,
                       weeklyPace: Pace(tokens: 0, typical: 0),
                       today: .zero, week: .zero, month: .zero,
                       burnRatePerMinute: nil, unknownModels: [], generatedAt: now)

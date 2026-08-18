@@ -42,7 +42,7 @@ private var utc: Calendar {
     #expect(snapshot.session.resetsAt == nil)
     #expect(snapshot.session.tokens == 0)
     #expect(snapshot.session.fraction == 0)
-    #expect(snapshot.session.ceiling > 0)   // denominador definido mesmo ocioso
+    #expect((snapshot.session.ceiling ?? 0) > 0)   // denominador definido mesmo ocioso
     #expect(snapshot.burnRatePerMinute == nil)
 }
 
@@ -88,4 +88,73 @@ private var utc: Calendar {
     #expect(snapshot.session.resetsAt == nil)
     #expect(snapshot.today == .zero)
     #expect(snapshot.unknownModels.isEmpty)
+}
+
+
+// MARK: - Leitura oficial
+
+private func officialUsage(fiveHour: Double?, sevenDay: Double?,
+                           fetchedAt: Date) -> OfficialUsage {
+    OfficialUsage(
+        fetchedAt: fetchedAt,
+        fiveHour: fiveHour.map {
+            OfficialUsage.Window(utilization: $0, resetsAt: date("2026-08-17T15:20:00Z"))
+        },
+        sevenDay: sevenDay.map {
+            OfficialUsage.Window(utilization: $0, resetsAt: date("2026-08-23T07:00:00Z"))
+        })
+}
+
+@Test func officialReadingWinsOverTheDerivedBlock() {
+    // A derivação não recupera a fase real da janela: o floor de hora perde até
+    // 59 minutos por bloco e o erro acumula. Quando há oficial, ele manda.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z", output: 500_000)],
+        now: now, calendar: utc,
+        override: Ceilings(blockTokens: 1_000_000),
+        official: officialUsage(fiveHour: 0.22, sevenDay: 0.19, fetchedAt: now))
+
+    #expect(snapshot.session.isOfficial)
+    #expect(snapshot.session.rawFraction == 0.22)
+    #expect(snapshot.session.resetsAt == date("2026-08-17T15:20:00Z"))
+    // O derivado diria 50% e resetaria às 15:00 — descartado.
+    #expect(snapshot.session.tokens == nil)
+}
+
+@Test func fallsBackToTheDerivedBlockWithoutOfficialData() {
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z", output: 500_000)],
+        now: date("2026-08-17T12:00:00Z"), calendar: utc,
+        override: Ceilings(blockTokens: 1_000_000), official: nil)
+
+    #expect(snapshot.session.isOfficial == false)
+    #expect(snapshot.session.rawFraction == 0.5)
+    #expect(snapshot.weekly == nil)   // semanal não é derivável
+}
+
+@Test func weeklyExistsOnlyWithOfficialData() {
+    let now = date("2026-08-17T12:00:00Z")
+    let withOfficial = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc,
+        override: nil, official: officialUsage(fiveHour: 0.22, sevenDay: 0.19, fetchedAt: now))
+    #expect(withOfficial.weekly?.rawFraction == 0.19)
+
+    // Janela ausente no arquivo (vem null com frequência) não vira zero.
+    let partial = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc,
+        override: nil, official: officialUsage(fiveHour: 0.22, sevenDay: nil, fetchedAt: now))
+    #expect(partial.weekly == nil)
+    #expect(partial.session.isOfficial)
+}
+
+@Test func officialGaugeReportsItsAge() {
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc, override: nil,
+        official: officialUsage(fiveHour: 0.22, sevenDay: nil,
+                                fetchedAt: date("2026-08-17T11:45:00Z")))
+    // Tipo explícito: `#expect` compara Optional<Double> com Int sem erro de
+    // compilação e simplesmente devolve false.
+    #expect(snapshot.session.age(at: now) == TimeInterval(15 * 60))
 }

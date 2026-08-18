@@ -16,6 +16,7 @@ public final class UsageStore {
 
     private let scanner: ProjectScanner
     private let cacheURL: URL
+    private let officialUsageURL: URL
     private let lookback: TimeInterval
 
     private var events: [UsageEvent] = []
@@ -27,10 +28,12 @@ public final class UsageStore {
     public init(
         scanner: ProjectScanner = ProjectScanner(),
         cacheURL: URL = ParseCache.defaultURL,
+        officialUsageURL: URL = OfficialUsageReader.defaultURL,
         lookback: TimeInterval = 90 * 24 * 60 * 60
     ) {
         self.scanner = scanner
         self.cacheURL = cacheURL
+        self.officialUsageURL = officialUsageURL
         self.lookback = lookback
         self.snapshot = .empty(at: Date())
     }
@@ -105,7 +108,11 @@ public final class UsageStore {
     }
 
     private func rebuild() {
+        // Relido a cada reconstrução: o arquivo é pequeno e o cache oficial se
+        // move sozinho enquanto o Claude Code roda.
+        let official = OfficialUsageReader.read(from: officialUsageURL)
         snapshot = SnapshotBuilder.build(
-            from: events, now: Date(), calendar: .current, override: ceilingOverride)
+            from: events, now: Date(), calendar: .current,
+            override: ceilingOverride, official: official)
     }
 }

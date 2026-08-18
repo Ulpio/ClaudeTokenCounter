@@ -29,7 +29,11 @@ struct UsagePanel: View {
                   gauge: snapshot.session,
                   detail: resetDetail(snapshot.session))
 
-            paceRow(snapshot.weeklyPace)
+            if let weekly = snapshot.weekly {
+                gauge(title: "Semanal", gauge: weekly, detail: resetDetail(weekly))
+            } else {
+                paceRow(snapshot.weeklyPace)
+            }
 
             if let rate = snapshot.burnRatePerMinute {
                 Text("\(Format.tokens(UInt64(rate)))/min")
@@ -37,19 +41,31 @@ struct UsagePanel: View {
                     .foregroundStyle(.secondary)
             }
 
-            Label("Estimativa calibrada pelo seu histórico", systemImage: "info.circle")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            if snapshot.session.isOfficial {
+                Label("Números oficiais da sua conta", systemImage: "checkmark.seal")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            } else {
+                Label("Estimativa calibrada pelo seu histórico", systemImage: "info.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(12)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 
-    private func resetDetail(_ block: UsageSnapshot.Gauge) -> String {
-        guard let resetsAt = block.resetsAt else { return "nenhuma sessão ativa" }
+    private func resetDetail(_ gauge: UsageSnapshot.Gauge) -> String {
+        guard let resetsAt = gauge.resetsAt else {
+            return gauge.isOfficial ? "" : "nenhuma sessão ativa"
+        }
         var text = "reseta \(Format.clockTime(resetsAt))"
-        if let remaining = block.timeRemaining(at: snapshot.generatedAt) {
+        if let remaining = gauge.timeRemaining(at: snapshot.generatedAt) {
             text += " · em \(Format.duration(remaining))"
+        }
+        // A idade importa: o cache oficial só se move quando o Claude Code roda.
+        if let age = gauge.age(at: snapshot.generatedAt), age > 120 {
+            text += " · lido há \(Format.duration(age))"
         }
         return text
     }

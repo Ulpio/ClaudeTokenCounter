@@ -7,7 +7,8 @@ public enum SnapshotBuilder {
         from events: [UsageEvent],
         now: Date,
         calendar: Calendar = .current,
-        override: Ceilings?
+        override: Ceilings?,
+        official: OfficialUsage? = nil
     ) -> UsageSnapshot {
         guard !events.isEmpty else { return .empty(at: now) }
 
@@ -23,12 +24,33 @@ public enum SnapshotBuilder {
 
         let active = blocks.last { $0.isActive(at: now) }
 
-        // Sem bloco ativo o medidor vem zerado, não ausente: acabou de resetar
-        // é justamente quando "0% de quanto" informa mais.
-        let sessionGauge = UsageSnapshot.Gauge(
-            tokens: active?.tokens ?? 0,
-            ceiling: ceilings.blockTokens,
-            resetsAt: active?.end)
+        // O número oficial vence sempre que existe: ele traz a fase real da
+        // janela, que a derivação não recupera — o floor de hora perde até 59
+        // minutos por bloco e o erro acumula ao longo da cadeia.
+        //
+        // Sem oficial, o medidor derivado vem zerado em vez de ausente quando
+        // não há bloco ativo: acabou de resetar é justamente quando "0% de
+        // quanto" informa mais.
+        let sessionGauge: UsageSnapshot.Gauge
+        if let fiveHour = official?.fiveHour, let fetchedAt = official?.fetchedAt {
+            sessionGauge = .official(fraction: fiveHour.utilization,
+                                     resetsAt: fiveHour.resetsAt,
+                                     fetchedAt: fetchedAt)
+        } else {
+            sessionGauge = .derived(tokens: active?.tokens ?? 0,
+                                    ceiling: ceilings.blockTokens,
+                                    resetsAt: active?.end)
+        }
+
+        // A janela semanal da Anthropic tem reset próprio e não é derivável do
+        // histórico local; sem oficial, a UI cai no múltiplo do ritmo típico.
+        let weeklyGauge = (official?.sevenDay).flatMap { sevenDay in
+            official.map {
+                UsageSnapshot.Gauge.official(fraction: sevenDay.utilization,
+                                             resetsAt: sevenDay.resetsAt,
+                                             fetchedAt: $0.fetchedAt)
+            }
+        }
 
         let burnRate: Double? = active.flatMap { block in
             let elapsedMinutes = now.timeIntervalSince(block.start) / 60
@@ -43,6 +65,7 @@ public enum SnapshotBuilder {
 
         return UsageSnapshot(
             session: sessionGauge,
+            weekly: weeklyGauge,
             weeklyPace: Pace(
                 tokens: rolling.tokens,
                 typical: CeilingCalibrator.typicalWeek(events: events, now: now)),
