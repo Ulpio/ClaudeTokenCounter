@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 extension Plan {
     /// Mapeia o `rateLimitTier` que o Claude Code grava no keychain.
@@ -20,35 +19,26 @@ extension Plan {
     }
 }
 
-/// Lê o plano do keychain, do item que o Claude Code já mantém.
+/// Lê o plano do item de keychain que o Claude Code já mantém.
 ///
 /// **Lê exclusivamente `rateLimitTier`.** O mesmo item guarda `accessToken` e
-/// `refreshToken`; nada aqui os toca, e não há caminho de código neste app que
-/// os leia. Isso é deliberado: o tier responde a pergunta do plano sem que o
-/// app precise de credencial nenhuma.
+/// `refreshToken`. O `accessToken` só é lido quando o usuário liga "Buscar
+/// números ao vivo" nos Ajustes, e mesmo então apenas pelo
+/// `KeychainCredentialSource` — este caminho passa `readsAccessToken: false` e
+/// o campo nem chega a ser extraído. O `refreshToken` não tem leitor nenhum em
+/// lugar algum do app: `ClaudeCredentials` não tem campo para ele.
+///
+/// A promessa aqui era absoluta e virou condicional quando a busca ao vivo
+/// entrou. Condicional e verificável é o que ela pode ser sem mentir.
 ///
 /// A primeira leitura dispara o prompt de keychain do macOS, porque o item
 /// pertence ao Claude Code. Negar só faz a detecção falhar — o seletor manual
 /// continua valendo.
 public enum PlanDetector {
-    static let service = "Claude Code-credentials"
-
-    public static func detect() -> Plan? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data,
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let oauth = root["claudeAiOauth"] as? [String: Any],
-              let tier = oauth["rateLimitTier"] as? String
-        else { return nil }
-
+    public static func detect(
+        source: any CredentialSource = KeychainCredentialSource(readsAccessToken: false)
+    ) -> Plan? {
+        guard let tier = source.credentials()?.rateLimitTier else { return nil }
         return Plan(rateLimitTier: tier)
     }
 }
