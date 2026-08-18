@@ -79,6 +79,12 @@ Três, cada um com razão. Se o revisor discordar de algum, ele volta para a for
 
 Criar `Tests/CCUsageCoreTests/UsageReportDecoderTests.swift`:
 
+> Os testes ficam dentro de `@Suite struct UsageReportDecoderTests` — métodos de um tipo, não funções
+> globais. Sem isso, `parsesResetTimestampWithSixFractionalDigits` colidem com os nomes idênticos em
+> `OfficialUsageReaderTests.swift`, que só é removido na Task 6, e o Swift recusa a
+> redeclaração. É o mesmo padrão que a Task 4 já usa. Os helpers de arquivo ficam
+> fora do struct.
+
 ```swift
 import Foundation
 import Testing
@@ -113,116 +119,118 @@ func dictionary(_ json: String) -> [String: Any] {
 
 let fixedNow = Date(timeIntervalSince1970: 1_787_000_000)
 
-@Test func decodesTheThreeLimitKindsFromTheLiveResponse() {
-    let report = UsageReportDecoder.decode(dictionary(liveResponse), fetchedAt: fixedNow)!
+@Suite struct UsageReportDecoderTests {
+    @Test func decodesTheThreeLimitKindsFromTheLiveResponse() {
+        let report = UsageReportDecoder.decode(dictionary(liveResponse), fetchedAt: fixedNow)!
 
-    #expect(report.session?.fraction == 0.06)
-    #expect(report.session?.isActive == false)
-    #expect(report.weeklyAll?.fraction == 0.25)
-    #expect(report.weeklyAll?.isActive == true)
-    #expect(report.weeklyScoped.count == 1)
-    #expect(report.weeklyScoped.first?.modelName == "Fable")
-    #expect(report.fetchedAt == fixedNow)
-}
+        #expect(report.session?.fraction == 0.06)
+        #expect(report.session?.isActive == false)
+        #expect(report.weeklyAll?.fraction == 0.25)
+        #expect(report.weeklyAll?.isActive == true)
+        #expect(report.weeklyScoped.count == 1)
+        #expect(report.weeklyScoped.first?.modelName == "Fable")
+        #expect(report.fetchedAt == fixedNow)
+    }
 
-@Test func readsLimitsAndIgnoresTheTopLevelCodenames() {
-    // `tangelo`, `nimbus_quill` e companhia são codinomes internos que giram.
-    // Nenhum pode virar janela: só `limits[]` define o que existe.
-    let report = UsageReportDecoder.decode(dictionary(liveResponse), fetchedAt: fixedNow)!
-    #expect(report.limits.count == 3)
-}
+    @Test func readsLimitsAndIgnoresTheTopLevelCodenames() {
+        // `tangelo`, `nimbus_quill` e companhia são codinomes internos que giram.
+        // Nenhum pode virar janela: só `limits[]` define o que existe.
+        let report = UsageReportDecoder.decode(dictionary(liveResponse), fetchedAt: fixedNow)!
+        #expect(report.limits.count == 3)
+    }
 
-@Test func parsesResetTimestampWithSixFractionalDigits() {
-    // O payload traz microssegundos e offset "+00:00" — formatos que o parser
-    // ISO padrão do Swift recusa se levados ao pé da letra.
-    let expected = try! Date.ISO8601FormatStyle(includingFractionalSeconds: false)
-        .parse("2026-08-18T19:20:00Z")
-    let report = UsageReportDecoder.decode(dictionary(liveResponse), fetchedAt: fixedNow)!
-    #expect(report.session?.resetsAt == expected)
-}
+    @Test func parsesResetTimestampWithSixFractionalDigits() {
+        // O payload traz microssegundos e offset "+00:00" — formatos que o parser
+        // ISO padrão do Swift recusa se levados ao pé da letra.
+        let expected = try! Date.ISO8601FormatStyle(includingFractionalSeconds: false)
+            .parse("2026-08-18T19:20:00Z")
+        let report = UsageReportDecoder.decode(dictionary(liveResponse), fetchedAt: fixedNow)!
+        #expect(report.session?.resetsAt == expected)
+    }
 
-@Test func nullResetTimeStaysNil() {
-    let report = UsageReportDecoder.decode(dictionary(liveResponse), fetchedAt: fixedNow)!
-    #expect(report.weeklyScoped.first?.resetsAt == nil)
-}
+    @Test func nullResetTimeStaysNil() {
+        let report = UsageReportDecoder.decode(dictionary(liveResponse), fetchedAt: fixedNow)!
+        #expect(report.weeklyScoped.first?.resetsAt == nil)
+    }
 
-@Test func unknownKindIsPreservedNotDiscarded() {
-    // O que aparece aqui é o que a próxima versão precisa suportar.
-    let json = """
-    { "limits": [ { "kind": "monthly_pilot", "percent": 5, "severity": "normal",
-                    "is_active": false } ] }
-    """
-    let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
-    #expect(report.limits.first?.kind == .other("monthly_pilot"))
-    #expect(report.session == nil)
-    #expect(report.weeklyAll == nil)
-}
+    @Test func unknownKindIsPreservedNotDiscarded() {
+        // O que aparece aqui é o que a próxima versão precisa suportar.
+        let json = """
+        { "limits": [ { "kind": "monthly_pilot", "percent": 5, "severity": "normal",
+                        "is_active": false } ] }
+        """
+        let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
+        #expect(report.limits.first?.kind == .other("monthly_pilot"))
+        #expect(report.session == nil)
+        #expect(report.weeklyAll == nil)
+    }
 
-@Test func unknownSeverityIsPreservedNotDiscarded() {
-    let json = """
-    { "limits": [ { "kind": "session", "percent": 91, "severity": "screaming",
-                    "is_active": true } ] }
-    """
-    let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
-    #expect(report.session?.severity == .other("screaming"))
-}
+    @Test func unknownSeverityIsPreservedNotDiscarded() {
+        let json = """
+        { "limits": [ { "kind": "session", "percent": 91, "severity": "screaming",
+                        "is_active": true } ] }
+        """
+        let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
+        #expect(report.session?.severity == .other("screaming"))
+    }
 
-@Test func firstEntryOfEachKindWins() {
-    // Uma segunda entrada de mesmo kind é formato novo, não correção da
-    // primeira — e formato novo deve ser ignorado, não obedecido.
-    let json = """
-    { "limits": [ { "kind": "session", "percent": 10, "severity": "normal", "is_active": true },
-                  { "kind": "session", "percent": 90, "severity": "normal", "is_active": true } ] }
-    """
-    let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
-    #expect(report.session?.fraction == 0.10)
-}
+    @Test func firstEntryOfEachKindWins() {
+        // Uma segunda entrada de mesmo kind é formato novo, não correção da
+        // primeira — e formato novo deve ser ignorado, não obedecido.
+        let json = """
+        { "limits": [ { "kind": "session", "percent": 10, "severity": "normal", "is_active": true },
+                      { "kind": "session", "percent": 90, "severity": "normal", "is_active": true } ] }
+        """
+        let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
+        #expect(report.session?.fraction == 0.10)
+    }
 
-@Test func scopedWindowsKeepPayloadOrder() {
-    let json = """
-    { "limits": [
-        { "kind": "weekly_scoped", "percent": 1, "severity": "normal", "is_active": false,
-          "scope": { "model": { "display_name": "Opus" } } },
-        { "kind": "weekly_scoped", "percent": 2, "severity": "normal", "is_active": false,
-          "scope": { "model": { "display_name": "Sonnet" } } } ] }
-    """
-    let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
-    #expect(report.weeklyScoped.map(\.modelName) == ["Opus", "Sonnet"])
-}
+    @Test func scopedWindowsKeepPayloadOrder() {
+        let json = """
+        { "limits": [
+            { "kind": "weekly_scoped", "percent": 1, "severity": "normal", "is_active": false,
+              "scope": { "model": { "display_name": "Opus" } } },
+            { "kind": "weekly_scoped", "percent": 2, "severity": "normal", "is_active": false,
+              "scope": { "model": { "display_name": "Sonnet" } } } ] }
+        """
+        let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
+        #expect(report.weeklyScoped.map(\.modelName) == ["Opus", "Sonnet"])
+    }
 
-@Test func fallsBackToTopLevelKeysWhenLimitsIsAbsent() {
-    // Claude Code antigo grava o cache sem `limits`. A janela ainda é legível.
-    let json = """
-    { "five_hour": { "utilization": 22, "resets_at": "2026-08-18T02:20:00.007553+00:00" },
-      "seven_day": { "utilization": 19, "resets_at": "2026-08-23T07:00:00.007577+00:00" },
-      "seven_day_opus": null }
-    """
-    let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
-    #expect(report.session?.fraction == 0.22)
-    #expect(report.weeklyAll?.fraction == 0.19)
-    // Sem `limits`, não há janela por modelo a recuperar: as chaves de topo
-    // para modelo vêm null e não são contrato.
-    #expect(report.weeklyScoped.isEmpty)
-}
+    @Test func fallsBackToTopLevelKeysWhenLimitsIsAbsent() {
+        // Claude Code antigo grava o cache sem `limits`. A janela ainda é legível.
+        let json = """
+        { "five_hour": { "utilization": 22, "resets_at": "2026-08-18T02:20:00.007553+00:00" },
+          "seven_day": { "utilization": 19, "resets_at": "2026-08-23T07:00:00.007577+00:00" },
+          "seven_day_opus": null }
+        """
+        let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
+        #expect(report.session?.fraction == 0.22)
+        #expect(report.weeklyAll?.fraction == 0.19)
+        // Sem `limits`, não há janela por modelo a recuperar: as chaves de topo
+        // para modelo vêm null e não são contrato.
+        #expect(report.weeklyScoped.isEmpty)
+    }
 
-@Test func nullTopLevelWindowsBecomeNothingNotZero() {
-    let json = #"{ "five_hour": null, "seven_day": null }"#
-    #expect(UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow) == nil)
-}
+    @Test func nullTopLevelWindowsBecomeNothingNotZero() {
+        let json = #"{ "five_hour": null, "seven_day": null }"#
+        #expect(UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow) == nil)
+    }
 
-@Test func payloadWithNoUsableWindowYieldsNoReport() {
-    #expect(UsageReportDecoder.decode(dictionary(#"{ "numStartups": 3 }"#),
-                                      fetchedAt: fixedNow) == nil)
-}
+    @Test func payloadWithNoUsableWindowYieldsNoReport() {
+        #expect(UsageReportDecoder.decode(dictionary(#"{ "numStartups": 3 }"#),
+                                          fetchedAt: fixedNow) == nil)
+    }
 
-@Test func entryMissingPercentIsSkippedNotZeroed() {
-    let json = """
-    { "limits": [ { "kind": "session", "severity": "normal", "is_active": true },
-                  { "kind": "weekly_all", "percent": 30, "severity": "normal", "is_active": true } ] }
-    """
-    let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
-    #expect(report.session == nil)
-    #expect(report.weeklyAll?.fraction == 0.30)
+    @Test func entryMissingPercentIsSkippedNotZeroed() {
+        let json = """
+        { "limits": [ { "kind": "session", "severity": "normal", "is_active": true },
+                      { "kind": "weekly_all", "percent": 30, "severity": "normal", "is_active": true } ] }
+        """
+        let report = UsageReportDecoder.decode(dictionary(json), fetchedAt: fixedNow)!
+        #expect(report.session == nil)
+        #expect(report.weeklyAll?.fraction == 0.30)
+    }
 }
 ```
 
@@ -440,6 +448,12 @@ Lê `~/.claude.json` pelo decoder compartilhado. Convive com o `OfficialUsageRea
 
 Criar `Tests/CCUsageCoreTests/CachedUsageReaderTests.swift`:
 
+> Os testes ficam dentro de `@Suite struct CachedUsageReaderTests` — métodos de um tipo, não funções
+> globais. Sem isso, `missingFileYieldsNoReading`, `malformedFileYieldsNoReading` e `fileWithoutTheCacheKeyYieldsNoReading` colidem com os nomes idênticos em
+> `OfficialUsageReaderTests.swift`, que só é removido na Task 6, e o Swift recusa a
+> redeclaração. É o mesmo padrão que a Task 4 já usa. Os helpers de arquivo ficam
+> fora do struct.
+
 ```swift
 import Foundation
 import Testing
@@ -476,59 +490,61 @@ private func writeTemp(_ contents: String) -> URL {
     return url
 }
 
-@Test func readsWindowsAndTheFetchTimestamp() {
-    let url = writeTemp(cacheShape)
-    defer { try? FileManager.default.removeItem(at: url) }
+@Suite struct CachedUsageReaderTests {
+    @Test func readsWindowsAndTheFetchTimestamp() {
+        let url = writeTemp(cacheShape)
+        defer { try? FileManager.default.removeItem(at: url) }
 
-    let report = CachedUsageReader.read(from: url)!
-    #expect(report.session?.fraction == 0.22)
-    #expect(report.weeklyAll?.fraction == 0.19)
-    // A idade do cache é parte do dado: ele só se move quando o Claude Code roda.
-    #expect(report.fetchedAt == Date(timeIntervalSince1970: 1787010875.105))
-}
+        let report = CachedUsageReader.read(from: url)!
+        #expect(report.session?.fraction == 0.22)
+        #expect(report.weeklyAll?.fraction == 0.19)
+        // A idade do cache é parte do dado: ele só se move quando o Claude Code roda.
+        #expect(report.fetchedAt == Date(timeIntervalSince1970: 1787010875.105))
+    }
 
-@Test func readsTheCachedLimitsArrayNotOnlyTheTopLevelKeys() {
-    let url = writeTemp(cacheShape)
-    defer { try? FileManager.default.removeItem(at: url) }
-    #expect(CachedUsageReader.read(from: url)?.session?.isActive == true)
-}
+    @Test func readsTheCachedLimitsArrayNotOnlyTheTopLevelKeys() {
+        let url = writeTemp(cacheShape)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(CachedUsageReader.read(from: url)?.session?.isActive == true)
+    }
 
-@Test func cacheWithoutLimitsFallsBackToTopLevelKeys() {
-    let json = """
-    { "cachedUsageUtilization": { "fetchedAtMs": 1787010875105,
-        "utilization": { "five_hour": { "utilization": 40, "resets_at": null } } } }
-    """
-    let url = writeTemp(json)
-    defer { try? FileManager.default.removeItem(at: url) }
-    #expect(CachedUsageReader.read(from: url)?.session?.fraction == 0.40)
-}
+    @Test func cacheWithoutLimitsFallsBackToTopLevelKeys() {
+        let json = """
+        { "cachedUsageUtilization": { "fetchedAtMs": 1787010875105,
+            "utilization": { "five_hour": { "utilization": 40, "resets_at": null } } } }
+        """
+        let url = writeTemp(json)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(CachedUsageReader.read(from: url)?.session?.fraction == 0.40)
+    }
 
-@Test func missingFileYieldsNoReading() {
-    let absent = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appending(path: "cctc-absent-\(UUID().uuidString).json")
-    #expect(CachedUsageReader.read(from: absent) == nil)
-}
+    @Test func missingFileYieldsNoReading() {
+        let absent = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appending(path: "cctc-absent-\(UUID().uuidString).json")
+        #expect(CachedUsageReader.read(from: absent) == nil)
+    }
 
-@Test func malformedFileYieldsNoReading() {
-    // Arquivo corrompido cai na próxima fonte em vez de derrubar o app.
-    let url = writeTemp("{ isto não é json")
-    defer { try? FileManager.default.removeItem(at: url) }
-    #expect(CachedUsageReader.read(from: url) == nil)
-}
+    @Test func malformedFileYieldsNoReading() {
+        // Arquivo corrompido cai na próxima fonte em vez de derrubar o app.
+        let url = writeTemp("{ isto não é json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(CachedUsageReader.read(from: url) == nil)
+    }
 
-@Test func fileWithoutTheCacheKeyYieldsNoReading() {
-    let url = writeTemp(#"{ "numStartups": 3 }"#)
-    defer { try? FileManager.default.removeItem(at: url) }
-    #expect(CachedUsageReader.read(from: url) == nil)
-}
+    @Test func fileWithoutTheCacheKeyYieldsNoReading() {
+        let url = writeTemp(#"{ "numStartups": 3 }"#)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(CachedUsageReader.read(from: url) == nil)
+    }
 
-@Test func cacheWithoutFetchTimestampYieldsNoReading() {
-    // Sem carimbo não dá para dizer a idade, e a idade é o que decide se este
-    // dado pode ser mostrado sem aviso.
-    let json = #"{ "cachedUsageUtilization": { "utilization": { "five_hour": { "utilization": 5 } } } }"#
-    let url = writeTemp(json)
-    defer { try? FileManager.default.removeItem(at: url) }
-    #expect(CachedUsageReader.read(from: url) == nil)
+    @Test func cacheWithoutFetchTimestampYieldsNoReading() {
+        // Sem carimbo não dá para dizer a idade, e a idade é o que decide se este
+        // dado pode ser mostrado sem aviso.
+        let json = #"{ "cachedUsageUtilization": { "utilization": { "five_hour": { "utilization": 5 } } } }"#
+        let url = writeTemp(json)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(CachedUsageReader.read(from: url) == nil)
+    }
 }
 ```
 
