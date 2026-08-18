@@ -43,13 +43,14 @@ pede que você rode o Claude Code; falha de rede pede que você espere.
 
 ## Instalação
 
-### Binário
+### DMG
 
-Baixe o `.zip` da [última release](../../releases/latest), descompacte e mova
-`ClaudeTokenCounter.app` para `/Applications`.
+Baixe o `.dmg` da [última release](../../releases/latest), abra, e arraste o app
+para a pasta `Applications` que aparece na janela.
 
 O app é assinado ad-hoc, não notarizado pela Apple. Na primeira abertura o
-macOS vai bloqueá-lo. Duas formas de liberar:
+macOS vai bloqueá-lo — o DMG deixa a instalação familiar, mas não muda isso.
+Duas formas de liberar:
 
 ```bash
 xattr -d com.apple.quarantine /Applications/ClaudeTokenCounter.app
@@ -70,6 +71,9 @@ git clone https://github.com/Ulpio/ClaudeTokenCounter.git
 cd ClaudeTokenCounter
 ./Scripts/bundle.sh --install    # monta e copia para /Applications
 ```
+
+Compilar localmente também evita o passo do Gatekeeper: o `.app` que você mesmo
+montou não chega com a marca de quarentena.
 
 Requer **macOS 26+**.
 
@@ -101,6 +105,7 @@ próprio Claude Code faz.
 ```bash
 ./Scripts/test.sh     # suíte do core (141 testes)
 ./Scripts/bundle.sh   # monta dist/ClaudeTokenCounter.app
+./Scripts/dmg.sh      # monta dist/ClaudeTokenCounter-<versão>.dmg
 ```
 
 **`swift test` puro não funciona** neste toolchain: o Command Line Tools traz o
