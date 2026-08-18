@@ -1991,7 +1991,34 @@ private func liveReportSaying(_ fraction: Double) -> UsageReport {
     await store.refreshLive()
     store.panelDidOpen()
 
+    // `panelDidOpen()` enfileira uma Task; sem um ponto de suspensão aqui a
+    // asserção rodaria antes dela poder executar, e passaria mesmo sem o guard.
+    await Task.yield()
+
     #expect(counter.calls == 0)
+    #expect(store.snapshot.session.rawFraction == 0.35)
+}
+
+@MainActor
+@Test func turningTheToggleOffDiscardsTheLiveNumberImmediately() async throws {
+    // O comportamento mais visível desta task: desautorizar a busca não pode
+    // deixar na tela o número que ela trouxe. Sem o `lastLive = nil` no didSet,
+    // o painel seguiria mostrando 0.06 até o tick seguinte.
+    let root = try makeRootWithOneEvent()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let cacheFile = root.appending(path: "claude.json")
+    try writeCache(0.35, agedBy: 13 * 3600, at: cacheFile)
+
+    let store = UsageStore(scanner: ProjectScanner(root: root),
+                           cacheURL: root.appending(path: "cache.json"),
+                           cachedUsageURL: cacheFile,
+                           liveUsageEnabled: true,
+                           fetchLive: { _ in liveReportSaying(0.06) })
+    await store.refresh()
+    await store.refreshLive()
+    #expect(store.snapshot.session.rawFraction == 0.06)
+
+    store.liveUsageEnabled = false
     #expect(store.snapshot.session.rawFraction == 0.35)
 }
 ```
@@ -2027,6 +2054,7 @@ Trocar as propriedades e o init:
     private var lastLive: Result<UsageReport, LiveUsageError>?
     private var lastLiveAttempt: Date?
     private var liveTicker: Task<Void, Never>?
+    private var isFetchingLive = false
 
     /// O `KeychainCredentialSource` que lê o token é construído **aqui e só
     /// aqui**, dentro de um caminho que nunca roda com o toggle desligado.
@@ -2060,8 +2088,16 @@ Acrescentar os métodos novos:
 ```swift
     /// Busca os números ao vivo. Guarda o resultado — inclusive o erro — porque
     /// a política precisa distinguir "ainda não busquei" de "busquei e falhou".
+    ///
+    /// Uma por vez. O `await` abaixo suspende, e sem esta guarda duas invocações
+    /// se atropelam: a mais lenta termina por último e sobrescreve a mais nova.
+    /// Um `.failure` velho apagando um `.success` fresco deixaria o painel
+    /// dizendo "sem conexão" sobre um cache de horas até o tick seguinte — que
+    /// é exatamente o tipo de mentira que esta mudança existe para eliminar.
     public func refreshLive() async {
-        guard liveUsageEnabled else { return }
+        guard liveUsageEnabled, !isFetchingLive else { return }
+        isFetchingLive = true
+        defer { isFetchingLive = false }
         let now = Date()
         lastLiveAttempt = now
         do {
