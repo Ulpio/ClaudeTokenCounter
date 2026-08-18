@@ -207,6 +207,27 @@ private func officialSource(_ limits: [UsageReport.Limit], fetchedAt: Date,
     #expect(snapshot.scopedWeekly.isEmpty)
 }
 
+@Test func officialNumbersSurviveAnEmptyLocalHistory() {
+    // Sem isto, o `guard !events.isEmpty` no topo do build descartaria números
+    // oficiais perfeitamente válidos. Instalação nova, pasta de projetos limpa,
+    // ou uso do Claude Code em outra máquina: o app mostraria nada tendo dado
+    // ao vivo na mão. Fica mais provável justamente agora que a fonte ao vivo
+    // não depende mais de haver JSONL local.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [], now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.session, 0.06, resetsAt: date("2026-08-17T15:20:00Z")),
+                                  limit(.weeklyAll, 0.25, isActive: true)],
+                                 fetchedAt: now, isLive: true),
+        status: .live(at: now))
+
+    #expect(snapshot.session.rawFraction == 0.06)
+    #expect(snapshot.weekly?.rawFraction == 0.25)
+    #expect(snapshot.sourceStatus == .live(at: now))
+    // Sem eventos locais não há custo a somar — isso continua zerado, e certo.
+    #expect(snapshot.today.tokens == 0)
+}
+
 @Test func theStatusTravelsWithTheSnapshot() {
     let now = date("2026-08-17T12:00:00Z")
     let snapshot = SnapshotBuilder.build(

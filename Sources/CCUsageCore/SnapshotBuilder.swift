@@ -11,7 +11,10 @@ public enum SnapshotBuilder {
         official: OfficialSource? = nil,
         status: UsageSourceStatus = .derivedOnly
     ) -> UsageSnapshot {
-        guard !events.isEmpty else { return .empty(at: now) }
+        // Sem eventos E sem oficial não há o que montar. Com oficial, há: os
+        // números da conta não dependem de existir JSONL local, e descartá-los
+        // por falta de histórico deixaria o painel vazio com o dado na mão.
+        guard !events.isEmpty || official != nil else { return .empty(at: now) }
 
         let blocks = BlockBuilder.blocks(from: events, calendar: calendar)
         let ceilings = CeilingCalibrator.calibrate(
