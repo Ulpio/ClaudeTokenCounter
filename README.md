@@ -1,47 +1,140 @@
-# ClaudeTokenCounter
+# Claude Token Counter
 
-App de menu bar (macOS 26+) que lê os logs locais do Claude Code e mostra
-consumo de tokens, risco de teto e valor equivalente em API.
+App de menu bar para macOS que mostra quanto do seu plano Claude Code já foi
+consumido — e, principalmente, **de onde esse número veio**.
 
-## Build
-
-Não requer Xcode — só Command Line Tools (Swift 6.4+).
-
-```bash
-./Scripts/test.sh     # suíte do core
-./Scripts/bundle.sh   # monta dist/ClaudeTokenCounter.app
-open dist/ClaudeTokenCounter.app
+```
+◐ 81%   ← quanto da janela de 5h já foi gasto, ao vivo
 ```
 
-`swift test` puro **não funciona** neste toolchain: o Command Line Tools traz o
+## Por que ele existe
+
+O Claude Code guarda em `~/.claude.json` um cache com o seu consumo. Esse cache
+**só se atualiza quando o Claude Code roda**.
+
+Numa medição real feita durante o desenvolvimento, o cache estava **18 horas
+atrasado**: dizia 35% de uso na janela de 5 horas quando o valor verdadeiro era
+**81%**. Um app que lesse só o cache diria que você tem folga de sobra
+justamente quando você está prestes a bater o teto.
+
+Este app busca os números ao vivo, e quando não consegue, **diz que não
+conseguiu** em vez de mostrar um valor velho com cara de fresco.
+
+## Três fontes, e a tela sempre diz qual está em uso
+
+| Fonte | Quando | O que a tela mostra |
+|---|---|---|
+| **Ao vivo** | Toggle ligado, credencial válida | `ao vivo` |
+| **Cache do Claude Code** | Toggle desligado, ou busca falhou | `cache do Claude Code · há 20m`, ou **`cache defasada · há 18h`** em amarelo quando passa de 1h |
+| **Derivado do histórico** | Sem cache — instalação nova | `estimado do seu histórico` |
+
+Um número sem procedência é um número em que não dá para confiar. Cada estado
+de falha tem frase própria, porque a saída é diferente: credencial expirada
+pede que você rode o Claude Code; falha de rede pede que você espere.
+
+## O que ele mostra
+
+- **Sessão (5h) e semanal**, com horário de reset e contagem regressiva
+- **Janelas semanais por modelo**, quando a sua conta tem alguma com uso
+- **Valor equivalente em API** — tokens e US$ de hoje, da semana e do mês,
+  com preço por modelo *e por data*; modelo sem preço conhecido nunca vira
+  US$ 0,00, o total é marcado como parcial
+- **Múltiplo de retorno** do plano: quanto o consumo do mês cobre a mensalidade
+
+## Instalação
+
+### Binário
+
+Baixe o `.zip` da [última release](../../releases/latest), descompacte e mova
+`ClaudeTokenCounter.app` para `/Applications`.
+
+O app é assinado ad-hoc, não notarizado pela Apple. Na primeira abertura o
+macOS vai bloqueá-lo. Duas formas de liberar:
+
+```bash
+xattr -d com.apple.quarantine /Applications/ClaudeTokenCounter.app
+```
+
+Ou: botão direito no app → **Abrir** → **Abrir** de novo no diálogo.
+
+Isso não é um contorno de segurança — é o que o macOS pede para qualquer app
+fora da App Store sem conta paga de desenvolvedor. O código está todo aqui para
+você conferir, e compilar você mesmo leva menos de dez segundos.
+
+### Do código-fonte
+
+Não precisa de Xcode — só Command Line Tools com Swift 6.4+.
+
+```bash
+git clone https://github.com/Ulpio/ClaudeTokenCounter.git
+cd ClaudeTokenCounter
+./Scripts/bundle.sh --install    # monta e copia para /Applications
+```
+
+Requer **macOS 26+**.
+
+## Privacidade
+
+O app roda inteiro na sua máquina. Não há servidor, telemetria, nem analytics.
+
+**Leitura local:** `~/.claude/projects/**/*.jsonl` (somente leitura, para tokens
+e custo) e `~/.claude.json` (o cache de uso).
+
+**Keychain:** o item `Claude Code-credentials`, que pertence ao Claude Code.
+Por padrão o app lê **apenas** o campo `rateLimitTier`, para detectar seu plano.
+
+O `accessToken` só é lido quando você liga **Ajustes → Números de uso → Buscar
+ao vivo**, e mesmo então por um único ponto do código, atrás de uma checagem
+do toggle. Com ele desligado, o campo não chega a ser extraído.
+
+O `refreshToken` **não tem leitor nenhum, em lugar nenhum do app** — e a
+garantia é estrutural, não uma promessa: o tipo `ClaudeCredentials` não tem
+campo onde guardá-lo. O app nunca renova OAuth, porque regravar o item de
+keychain do Claude Code pode invalidar a sessão dele.
+
+**Rede:** uma única chamada, `GET https://api.anthropic.com/api/oauth/usage`,
+a cada 5 minutos, e só com a busca ao vivo ligada. É a mesma chamada que o
+próprio Claude Code faz.
+
+## Desenvolvimento
+
+```bash
+./Scripts/test.sh     # suíte do core (141 testes)
+./Scripts/bundle.sh   # monta dist/ClaudeTokenCounter.app
+```
+
+**`swift test` puro não funciona** neste toolchain: o Command Line Tools traz o
 swift-testing mas não o conecta — o plugin de macros fica fora do plugin path e
-`Testing.framework` / `lib_TestingInterop.dylib` ficam fora do rpath do bundle.
-`Scripts/test.sh` injeta os três caminhos e repassa os argumentos, então
-`./Scripts/test.sh --filter PricingTable` funciona normalmente.
+`Testing.framework` / `lib_TestingInterop.dylib` ficam fora do rpath do bundle
+de teste. `Scripts/test.sh` injeta os três caminhos e repassa os argumentos,
+então `./Scripts/test.sh --filter PricingTable` funciona normalmente.
 
 Pela mesma razão o app não usa `@State`: no SDK do macOS 26 ele é uma macro do
 SwiftUI e o plugin `SwiftUIMacros` só acompanha o Xcode. O redesenho vem do
 `@Observable`, cujo plugin existe no CLT.
 
-## Como funciona
+### Arquitetura
 
-Lê `~/.claude/projects/**/*.jsonl` (append-only, somente leitura) com parsing
-incremental por offset de byte, deduplicando por `message.id` + `requestId`.
-O cache em `~/Library/Application Support/ClaudeTokenCounter/` guarda os offsets
-**e** os eventos, para o app abrir com histórico completo sem reparsear.
+Dois alvos. `CCUsageCore` não importa SwiftUI — toda a lógica é testável sem
+instanciar janela.
 
-Duas métricas, respondendo perguntas diferentes:
+A resposta ao vivo da API e o cache em `~/.claude.json` são **o mesmo payload**:
+o segundo é uma cópia gravada do primeiro. Por isso existe um decoder só
+(`UsageReportDecoder`) alimentado por duas origens, e uma função pura
+(`UsageSourcePolicy`) escolhe entre elas. Nada a jusante sabe de onde veio o
+número — exceto a linha da UI que existe para dizer.
 
-**Risco** — quanto do plano já foi queimado no bloco de 5h e nos últimos 7 dias.
-Os blocos são *derivados* da atividade, porque a Anthropic não persiste os
-horários de reset localmente. O teto é *calibrado* pelo maior consumo já
-observado, contando apenas janelas inteiramente no passado — a janela corrente
-não pode definir o próprio denominador. Ambos são estimativas, e a UI diz isso.
+O contrato lido é o array `limits[]`, não as chaves de topo do payload: aquelas
+são codinomes internos que giram a cada ciclo de produto, e é `limits[]` que
+traz as janelas por modelo com nome de exibição.
 
-**Valor** — tokens e $ equivalente de API hoje / semana / mês. Determinístico:
-tabela de preços por modelo **e data** (o preço promocional do Sonnet 5 expira
-em 2026-08-31), com as cinco dimensões cobradas separadamente — input, output,
-cache write 5m, cache write 1h e cache read. Modelo desconhecido nunca vira
-$0: o total é marcado como parcial e ganha sufixo `+`.
+Decisões de projeto estão em `docs/superpowers/specs/` e `docs/superpowers/plans/`.
 
-Detalhes em `docs/superpowers/specs/` e `docs/superpowers/plans/`.
+## Créditos
+
+Inspirado no [CodexBar](https://github.com/steipete/CodexBar), de Peter
+Steinberger, que mostrou que o endpoint de uso existia e valia a pena.
+
+## Licença
+
+MIT — veja [LICENSE](LICENSE).

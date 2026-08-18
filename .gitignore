@@ -9,3 +9,6 @@ dist/
 
 # macOS
 .DS_Store
+
+# Workspace de execução do superpowers (scratch, não versionado)
+.superpowers/
