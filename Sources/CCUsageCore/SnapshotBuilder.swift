@@ -8,7 +8,8 @@ public enum SnapshotBuilder {
         now: Date,
         calendar: Calendar = .current,
         override: Ceilings?,
-        official: OfficialUsage? = nil
+        official: OfficialSource? = nil,
+        status: UsageSourceStatus = .derivedOnly
     ) -> UsageSnapshot {
         guard !events.isEmpty else { return .empty(at: now) }
 
@@ -32,10 +33,8 @@ public enum SnapshotBuilder {
         // não há bloco ativo: acabou de resetar é justamente quando "0% de
         // quanto" informa mais.
         let sessionGauge: UsageSnapshot.Gauge
-        if let fiveHour = official?.fiveHour, let fetchedAt = official?.fetchedAt {
-            sessionGauge = .official(fraction: fiveHour.utilization,
-                                     resetsAt: fiveHour.resetsAt,
-                                     fetchedAt: fetchedAt)
+        if let official, let session = official.report.session {
+            sessionGauge = .official(session, from: official)
         } else {
             sessionGauge = .derived(tokens: active?.tokens ?? 0,
                                     ceiling: ceilings.blockTokens,
@@ -44,13 +43,20 @@ public enum SnapshotBuilder {
 
         // A janela semanal da Anthropic tem reset próprio e não é derivável do
         // histórico local; sem oficial, a UI cai no múltiplo do ritmo típico.
-        let weeklyGauge = (official?.sevenDay).flatMap { sevenDay in
-            official.map {
-                UsageSnapshot.Gauge.official(fraction: sevenDay.utilization,
-                                             resetsAt: sevenDay.resetsAt,
-                                             fetchedAt: $0.fetchedAt)
-            }
+        let weeklyGauge = official.flatMap { source in
+            source.report.weeklyAll.map { UsageSnapshot.Gauge.official($0, from: source) }
         }
+
+        // Janela sem nome de modelo é descartada: uma barra anônima não diz de
+        // que é o teto que ela mede.
+        let scoped = official.map { source in
+            source.report.weeklyScoped.compactMap { limit in
+                limit.modelName.map {
+                    UsageSnapshot.ScopedGauge(modelName: $0,
+                                              gauge: .official(limit, from: source))
+                }
+            }
+        } ?? []
 
         let burnRate: Double? = active.flatMap { block in
             let elapsedMinutes = now.timeIntervalSince(block.start) / 60
@@ -66,12 +72,14 @@ public enum SnapshotBuilder {
         return UsageSnapshot(
             session: sessionGauge,
             weekly: weeklyGauge,
+            scopedWeekly: scoped,
             weeklyPace: Pace(
                 tokens: rolling.tokens,
                 typical: CeilingCalibrator.typicalWeek(events: events, now: now)),
             today: today, week: week, month: month,
             burnRatePerMinute: burnRate,
             unknownModels: unknown,
-            generatedAt: now)
+            generatedAt: now,
+            sourceStatus: status)
     }
 }
