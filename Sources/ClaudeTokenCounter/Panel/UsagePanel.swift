@@ -227,6 +227,17 @@ struct UsagePanel: View {
             SettingsLink {
                 Label("Ajustes", systemImage: "gearshape")
             }
+            // O app é `LSUIElement`: não tem Dock e nunca se ativa sozinho.
+            // `SettingsLink` cria a janela, mas sem ativação ela nasce atrás de
+            // todas as outras — medido: a janela existia com `onscreen=false`, e
+            // ativar o app a trouxe para a frente sem tocar em mais nada. Sem
+            // isto o clique parece não fazer coisa alguma.
+            //
+            // Vai no toque, não no `onAppear` da janela: a janela é criada uma
+            // vez e reaproveitada, então `onAppear` não dispararia da segunda
+            // vez em diante — que é justamente quando o usuário já está
+            // confuso e clicando de novo.
+            .simultaneousGesture(TapGesture().onEnded { NSApp.activate() })
             .buttonStyle(.plain)
             .font(.caption)
             .foregroundStyle(.secondary)
