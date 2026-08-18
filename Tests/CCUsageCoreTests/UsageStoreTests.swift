@@ -183,3 +183,34 @@ private func liveReportSaying(_ fraction: Double) -> UsageReport {
     store.liveUsageEnabled = false
     #expect(store.snapshot.session.rawFraction == 0.35)
 }
+
+@MainActor
+@Test func turningTheToggleBackOnDoesNotFlashTheOldLiveNumber() async throws {
+    // Este é o caso que o `lastLive = nil` de fato protege, e que desligar
+    // sozinho não exercita: a política já ignora `live` com o toggle desligado.
+    // Sem o descarte, religar mostraria o número ao vivo ANTIGO marcado como
+    // `.live` — e `age(at:)` devolve nil para `.live`, então nem a idade
+    // denunciaria. Com o descarte, o religar cai no cache até a busca nova
+    // chegar, e o cache sabe dizer que tem 13h.
+    let root = try makeRootWithOneEvent()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let cacheFile = root.appending(path: "claude.json")
+    try writeCache(0.35, agedBy: 13 * 3600, at: cacheFile)
+
+    let store = UsageStore(scanner: ProjectScanner(root: root),
+                           cacheURL: root.appending(path: "cache.json"),
+                           cachedUsageURL: cacheFile,
+                           liveUsageEnabled: true,
+                           fetchLive: { _ in liveReportSaying(0.06) })
+    await store.refresh()
+    await store.refreshLive()
+    #expect(store.snapshot.session.rawFraction == 0.06)
+
+    store.liveUsageEnabled = false
+    store.liveUsageEnabled = true
+
+    // O rebuild síncrono do didSet já rodou; a busca nova ainda não voltou.
+    #expect(store.snapshot.session.rawFraction == 0.35)
+    // E a idade denuncia o cache, coisa que `.live` não faria.
+    #expect(store.snapshot.session.age(at: Date()) != nil)
+}

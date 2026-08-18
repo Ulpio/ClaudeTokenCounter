@@ -6,14 +6,14 @@ public struct UsageSnapshot: Sendable, Equatable {
     /// De onde este medidor veio. Três estados, não dois: o cache do Claude
     /// Code é oficial *e* pode estar horas defasado, e essas são perguntas
     /// diferentes.
-    public enum Provenance: Sendable, Equatable {
+    public enum Provenance: Sendable, Hashable {
         case live(at: Date)
         case cached(at: Date)
         case derived
     }
 
     /// Um medidor de janela.
-    public struct Gauge: Sendable, Equatable {
+    public struct Gauge: Sendable, Hashable {
         /// Razão real, sem saturação. Passa de 1 quando o consumo supera o
         /// denominador — e é aí que o número mais informa.
         public let rawFraction: Double
@@ -69,7 +69,7 @@ public struct UsageSnapshot: Sendable, Equatable {
 
     /// Uma janela semanal presa a um modelo. O rótulo vem do payload — o app
     /// não mantém lista de nomes de modelo, porque essa lista envelhece.
-    public struct ScopedGauge: Sendable, Equatable {
+    public struct ScopedGauge: Sendable, Hashable {
         public let modelName: String
         public let gauge: Gauge
 

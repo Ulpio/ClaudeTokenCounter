@@ -155,6 +155,24 @@ private func officialSource(_ limits: [UsageReport.Limit], fetchedAt: Date,
     #expect(partial.session.isOfficial)
 }
 
+@Test func aReportWithoutASessionWindowLeavesTheSessionDerived() {
+    // O inverso de `weeklyExistsOnlyWithOfficialData`, e o estado que a UI
+    // precisa saber distinguir: cache antigo com `five_hour: null` produz
+    // relatório só com a semanal, e aí o snapshot tem procedências mistas —
+    // semanal oficial, sessão derivada do histórico local.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z", output: 500_000)],
+        now: now, calendar: utc,
+        override: Ceilings(blockTokens: 1_000_000),
+        official: officialSource([limit(.weeklyAll, 0.19)], fetchedAt: now),
+        status: .cached(age: 20 * 60))
+
+    #expect(snapshot.weekly?.provenance == .cached(at: now))
+    #expect(snapshot.session.provenance == .derived)
+    #expect(snapshot.session.rawFraction == 0.5)
+}
+
 @Test func cachedGaugeReportsItsAge() {
     let now = date("2026-08-17T12:00:00Z")
     let snapshot = SnapshotBuilder.build(

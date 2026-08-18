@@ -18,9 +18,15 @@ public final class UsageStore {
     /// sucesso, 401 e falha de rede sem tocar keychain nem rede.
     public typealias LiveFetch = @Sendable (Date) async throws -> UsageReport
 
-    /// Liga a busca ao vivo. Ligar dispara uma busca imediata; desligar
-    /// descarta o último resultado, para a UI voltar ao cache na hora em vez de
-    /// continuar mostrando um número que o usuário acabou de desautorizar.
+    /// Liga a busca ao vivo. Ligar dispara uma busca imediata.
+    ///
+    /// O `lastLive = nil` importa no **religar**, não no desligar: com o toggle
+    /// desligado a política já ignora o resultado ao vivo, e a UI volta ao cache
+    /// de qualquer jeito. Sem o descarte, religar faria o `rebuild()` síncrono
+    /// logo abaixo mostrar o número ao vivo *antigo*, com procedência `.live` —
+    /// e `age(at:)` devolve `nil` para `.live` por desenho, então o painel diria
+    /// "ao vivo" sem nenhum jeito de o usuário perceber que o dado é velho. É a
+    /// mesma mentira que esta mudança existe para eliminar.
     public var liveUsageEnabled: Bool {
         didSet {
             guard liveUsageEnabled != oldValue else { return }

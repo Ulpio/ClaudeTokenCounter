@@ -31,7 +31,7 @@ public struct UsageReport: Sendable, Equatable {
         /// em 6% e 25%, longe de qualquer alerta. Os nomes das gravidades altas
         /// são desconhecidos, e inventá-los produziria um `.other` silencioso
         /// com cara de suporte: pior que não suportar.
-        public enum Severity: Sendable, Equatable {
+        public enum Severity: Sendable, Hashable {
             case normal
             case other(String)
 

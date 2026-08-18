@@ -38,7 +38,7 @@ struct UsagePanel: View {
             // Só as que dizem algo. Uma linha "Fable 0%" permanente é ruído: a
             // janela existe no payload mas não informa nada.
             ForEach(snapshot.scopedWeekly.filter { $0.gauge.isActive || $0.gauge.rawFraction > 0 },
-                    id: \.modelName) { scoped in
+                    id: \.self) { scoped in
                 gauge(title: scoped.modelName,
                       gauge: scoped.gauge,
                       detail: resetDetail(scoped.gauge))
@@ -90,12 +90,26 @@ struct UsagePanel: View {
     }
 
     private func resetDetail(_ gauge: UsageSnapshot.Gauge) -> String {
-        guard let resetsAt = gauge.resetsAt else {
-            return gauge.isOfficial ? "" : "nenhuma sessão ativa"
+        var text: String
+        if let resetsAt = gauge.resetsAt {
+            text = "reseta \(Format.clockTime(resetsAt))"
+            if let remaining = gauge.timeRemaining(at: snapshot.generatedAt) {
+                text += " · em \(Format.duration(remaining))"
+            }
+        } else {
+            text = gauge.isOfficial ? "" : "nenhuma sessão ativa"
         }
-        var text = "reseta \(Format.clockTime(resetsAt))"
-        if let remaining = gauge.timeRemaining(at: snapshot.generatedAt) {
-            text += " · em \(Format.duration(remaining))"
+
+        // Um snapshot pode ter procedências mistas: a semanal vem do relatório
+        // oficial e a sessão cai no derivado quando o payload não traz a janela
+        // de 5h — cache antigo com `five_hour: null`, que é o estado justamente
+        // quando o cache está mais velho. A linha de procedência é uma só, do
+        // snapshot inteiro, então sem esta marca o medidor derivado apareceria
+        // sob "ao vivo", prometendo um frescor que ele não tem. O código
+        // anterior estampava a idade por medidor e não tinha esse buraco; a
+        // linha única é melhor, mas precisa disto para não mentir.
+        if gauge.provenance == .derived, snapshot.sourceStatus != .derivedOnly {
+            text = text.isEmpty ? "estimado do seu histórico" : text + " · estimado"
         }
         return text
     }
