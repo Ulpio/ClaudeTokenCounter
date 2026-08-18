@@ -19,6 +19,11 @@ public enum SnapshotBuilder {
         let blocks = BlockBuilder.blocks(from: events, calendar: calendar)
         let ceilings = CeilingCalibrator.calibrate(
             blocks: blocks, now: now, override: override)
+        // Sem o override: é a referência que a janela de Ajustes mostra enquanto
+        // o usuário digita o dele, e devolver o próprio override não informaria
+        // nada. `calibrate` aplica o piso, então isto nunca é zero.
+        let calibrated = CeilingCalibrator.calibrate(
+            blocks: blocks, now: now, override: nil).blockTokens
 
         let aggregator = PeriodAggregator(calendar: calendar)
         let today = aggregator.totals(from: events, in: aggregator.todayInterval(now: now))
@@ -83,6 +88,7 @@ public enum SnapshotBuilder {
             burnRatePerMinute: burnRate,
             unknownModels: unknown,
             generatedAt: now,
+            calibratedBlockCeiling: calibrated,
             sourceStatus: status)
     }
 }

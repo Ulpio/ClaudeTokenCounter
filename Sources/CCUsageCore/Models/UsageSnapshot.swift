@@ -98,6 +98,16 @@ public struct UsageSnapshot: Sendable, Equatable {
     /// Nomes crus de modelos sem preço conhecido — a UI mostra quais são.
     public let unknownModels: Set<String>
     public let generatedAt: Date
+    /// Teto do bloco de 5h como a calibração automática o encontrou —
+    /// **ignorando o override manual de propósito**.
+    ///
+    /// Mora aqui, e não em `Gauge.ceiling`, por duas razões. O medidor oficial
+    /// não tem denominador local (`Gauge.official` deixa `ceiling` nulo), então
+    /// tirá-lo de lá dava zero justamente no caminho que virou o normal. E o
+    /// medidor derivado carrega o teto *efetivo*, que é o override quando existe
+    /// — devolvê-lo à tela seria circular, porque ela mostra este número como
+    /// referência enquanto o usuário digita o próprio override.
+    public let calibratedBlockCeiling: UInt64
     /// De onde vieram os números, incluindo os estados de falha. A UI diz isso
     /// em vez de mostrar um número sem procedência.
     public let sourceStatus: UsageSourceStatus
@@ -106,7 +116,7 @@ public struct UsageSnapshot: Sendable, Equatable {
         session: Gauge, weekly: Gauge?, scopedWeekly: [ScopedGauge], weeklyPace: Pace,
         today: Totals, week: Totals, month: Totals,
         burnRatePerMinute: Double?, unknownModels: Set<String>, generatedAt: Date,
-        sourceStatus: UsageSourceStatus
+        calibratedBlockCeiling: UInt64, sourceStatus: UsageSourceStatus
     ) {
         self.session = session
         self.weekly = weekly
@@ -118,6 +128,7 @@ public struct UsageSnapshot: Sendable, Equatable {
         self.burnRatePerMinute = burnRatePerMinute
         self.unknownModels = unknownModels
         self.generatedAt = generatedAt
+        self.calibratedBlockCeiling = calibratedBlockCeiling
         self.sourceStatus = sourceStatus
     }
 
@@ -128,6 +139,7 @@ public struct UsageSnapshot: Sendable, Equatable {
                       weeklyPace: Pace(tokens: 0, typical: 0),
                       today: .zero, week: .zero, month: .zero,
                       burnRatePerMinute: nil, unknownModels: [], generatedAt: now,
+                      calibratedBlockCeiling: CeilingCalibrator.floorBlockTokens,
                       sourceStatus: .derivedOnly)
     }
 }

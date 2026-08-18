@@ -37,7 +37,7 @@ struct ClaudeTokenCounterApp: App {
             SettingsView(settings: Self.settings,
                          form: Self.form,
                          loginItem: Self.loginItem,
-                         calibratedCeiling: Self.store.snapshot.session.ceiling ?? 0)
+                         calibratedCeiling: Self.store.snapshot.calibratedBlockCeiling)
                 // O store é a única fonte do denominador; as settings só
                 // publicam a intenção do usuário e esta ponte a aplica.
                 .onChange(of: Self.settings.ceilingOverride) { _, override in

@@ -246,6 +246,50 @@ private func officialSource(_ limits: [UsageReport.Limit], fetchedAt: Date,
     #expect(snapshot.today.tokens == 0)
 }
 
+@Test func theCalibratedCeilingSurvivesOfficialData() {
+    // O caminho oficial não tem denominador local — `Gauge.official` deixa
+    // `ceiling` nulo de propósito. Mas a janela de Ajustes precisa do teto
+    // calibrado como referência para o campo manual, e ela o tirava do gauge:
+    // com dado oficial lia zero, que é o caso normal desde que a busca ao vivo
+    // entrou. O valor mora no snapshot agora, não no medidor.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T02:00:00Z", output: 3_000_000)],
+        now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.session, 0.06)], fetchedAt: now, isLive: true),
+        status: .live(at: now))
+
+    #expect(snapshot.session.ceiling == nil)          // o medidor oficial segue sem
+    #expect(snapshot.calibratedBlockCeiling == 3_000_000)
+}
+
+@Test func theCalibratedCeilingIgnoresTheManualOverride() {
+    // A tela mostra "Calibrado automaticamente: X" enquanto o usuário digita um
+    // teto manual — é a referência que justifica a tela existir. Devolver o
+    // override seria circular: mostraria de volta o número que ele acabou de
+    // digitar, com o rótulo errado.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T02:00:00Z", output: 3_000_000)],
+        now: now, calendar: utc,
+        override: Ceilings(blockTokens: 999),
+        official: nil, status: .derivedOnly)
+
+    #expect(snapshot.session.ceiling == 999)          // o medidor usa o override
+    #expect(snapshot.calibratedBlockCeiling == 3_000_000)  // a referência, não
+}
+
+@Test func theCalibratedCeilingFallsToTheFloorWithoutHistory() {
+    // Primeiro launch: sem bloco completo não há pico observado, e o piso existe
+    // para o percentual não dividir por zero. A tela mostra o piso, não zero.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [], now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.session, 0.06)], fetchedAt: now, isLive: true),
+        status: .live(at: now))
+    #expect(snapshot.calibratedBlockCeiling == CeilingCalibrator.floorBlockTokens)
+}
+
 @Test func theStatusTravelsWithTheSnapshot() {
     let now = date("2026-08-17T12:00:00Z")
     let snapshot = SnapshotBuilder.build(
