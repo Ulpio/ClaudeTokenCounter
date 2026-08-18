@@ -1767,7 +1767,7 @@ Acrescentar ao final de `Tests/CCUsageCoreTests/AppSettingsTests.swift`:
 }
 ```
 
-> Se `freshDefaults()` não existir em `AppSettingsTests.swift`, ele já existe em `PlanDetectionTests.swift` no mesmo alvo de teste e é visível — não redeclarar.
+> `AppSettingsTests.swift` já declara `private func freshDefaults()` na linha 5. Use essa — não redeclarar. (A cópia em `PlanDetectionTests.swift` é `private` e **não** é visível daqui.)
 
 - [ ] **Step 2: Rodar e confirmar que falha**
 
