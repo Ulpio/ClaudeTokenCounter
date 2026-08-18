@@ -2240,11 +2240,19 @@ Em `SettingsView.swift`, entre a seção "Plano" e "Teto do bloco de 5h":
 
 - [ ] **Step 5: Ligar as pontas no `App.swift`**
 
-No `init()`, depois de `Self.store.ceilingOverride = …`:
+O store passa a nascer já configurado, em vez de receber o valor por atribuição:
 
 ```swift
-        Self.store.liveUsageEnabled = Self.settings.liveUsageEnabled
+    @MainActor private static let store = UsageStore(
+        liveUsageEnabled: Self.settings.liveUsageEnabled)
 ```
+
+**Por que não atribuir no `init()`.** `UsageStore.liveUsageEnabled` tem `didSet` que
+dispara uma busca ao ligar, e `start()` dispara outra imediatamente no ticker. Atribuir
+antes de `start()` produziria duas requisições quase simultâneas a cada launch, para
+todo usuário com o toggle ligado. Nascer configurado não dispara `didSet` — a busca
+inicial fica sendo só a do ticker, e o `didSet` continua servindo o caso que ele existe
+para servir, que é o usuário mexendo no toggle.
 
 No `MenuBarExtra`, avisar o store quando o painel aparece:
 
