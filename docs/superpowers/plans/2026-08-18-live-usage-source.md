@@ -1519,6 +1519,27 @@ private func officialSource(_ limits: [UsageReport.Limit], fetchedAt: Date,
     #expect(snapshot.scopedWeekly.isEmpty)
 }
 
+@Test func officialNumbersSurviveAnEmptyLocalHistory() {
+    // Sem isto, o `guard !events.isEmpty` no topo do build descartaria números
+    // oficiais perfeitamente válidos. Instalação nova, pasta de projetos limpa,
+    // ou uso do Claude Code em outra máquina: o app mostraria nada tendo dado
+    // ao vivo na mão. Fica mais provável justamente agora que a fonte ao vivo
+    // não depende mais de haver JSONL local.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [], now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.session, 0.06, resetsAt: date("2026-08-17T15:20:00Z")),
+                                  limit(.weeklyAll, 0.25, isActive: true)],
+                                 fetchedAt: now, isLive: true),
+        status: .live(at: now))
+
+    #expect(snapshot.session.rawFraction == 0.06)
+    #expect(snapshot.weekly?.rawFraction == 0.25)
+    #expect(snapshot.sourceStatus == .live(at: now))
+    // Sem eventos locais não há custo a somar — isso continua zerado, e certo.
+    #expect(snapshot.today.tokens == 0)
+}
+
 @Test func theStatusTravelsWithTheSnapshot() {
     let now = date("2026-08-17T12:00:00Z")
     let snapshot = SnapshotBuilder.build(
@@ -1652,6 +1673,19 @@ Substituir a assinatura e o bloco dos medidores:
     ) -> UsageSnapshot {
 ```
 
+E o `guard` de saída antecipada passa a ceder quando há fonte oficial:
+
+```swift
+        // Sem eventos E sem oficial não há o que montar. Com oficial, há: os
+        // números da conta não dependem de existir JSONL local, e descartá-los
+        // por falta de histórico deixaria o painel vazio com o dado na mão.
+        guard !events.isEmpty || official != nil else { return .empty(at: now) }
+```
+
+O resto do corpo já tolera lista vazia: `CeilingCalibrator` devolve o piso de
+`floorBlockTokens` em vez de zero, `PeriodAggregator` devolve totais zerados,
+`active` fica `nil` e `Pace.multiple` devolve `nil` sem dividir por zero.
+
 E, no lugar do bloco que hoje monta `sessionGauge` e `weeklyGauge`:
 
 ```swift
@@ -1716,7 +1750,7 @@ O `UsageStore.swift` ainda referencia `OfficialUsageReader` e vai parar de compi
 - [ ] **Step 7: Rodar os testes e confirmar que passam**
 
 Run: `./Scripts/test.sh --filter SnapshotBuilder`
-Expected: PASS, 9 testes na seção oficial.
+Expected: PASS, 9 testes na seção oficial (8 originais mais `officialNumbersSurviveAnEmptyLocalHistory`).
 
 - [ ] **Step 8: Rodar a suíte inteira**
 
