@@ -62,3 +62,34 @@ private func freshDefaults() -> UserDefaults {
     let settings = AppSettings(defaults: defaults, detectPlan: { nil })
     #expect(settings.plan == .max20)
 }
+
+@MainActor
+@Test func liveUsageIsOffUntilTheUserSaysOtherwise() {
+    // O app passa a depender de credencial de outro app. Isso é escolha do
+    // usuário, não default.
+    let settings = AppSettings(defaults: freshDefaults(), detectPlan: { nil })
+    #expect(settings.liveUsageEnabled == false)
+}
+
+@MainActor
+@Test func liveUsageChoiceSurvivesRestart() {
+    let defaults = freshDefaults()
+    let first = AppSettings(defaults: defaults, detectPlan: { nil })
+    first.liveUsageEnabled = true
+
+    let restarted = AppSettings(defaults: defaults, detectPlan: { nil })
+    #expect(restarted.liveUsageEnabled)
+}
+
+@MainActor
+@Test func settingsSavedBeforeTheToggleExistedStayOff() {
+    // Payload gravado por uma versão anterior não tem o campo. Ausência não
+    // pode virar "ligado" — seria autorizar a leitura do token sem perguntar.
+    let defaults = freshDefaults()
+    let legacy = #"{"plan":"max5"}"#
+    defaults.set(Data(legacy.utf8), forKey: AppSettings.storageKey)
+
+    let settings = AppSettings(defaults: defaults, detectPlan: { nil })
+    #expect(settings.plan == .max5)
+    #expect(settings.liveUsageEnabled == false)
+}

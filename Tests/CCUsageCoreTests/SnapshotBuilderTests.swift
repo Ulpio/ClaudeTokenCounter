@@ -93,16 +93,16 @@ private var utc: Calendar {
 
 // MARK: - Leitura oficial
 
-private func officialUsage(fiveHour: Double?, sevenDay: Double?,
-                           fetchedAt: Date) -> OfficialUsage {
-    OfficialUsage(
-        fetchedAt: fetchedAt,
-        fiveHour: fiveHour.map {
-            OfficialUsage.Window(utilization: $0, resetsAt: date("2026-08-17T15:20:00Z"))
-        },
-        sevenDay: sevenDay.map {
-            OfficialUsage.Window(utilization: $0, resetsAt: date("2026-08-23T07:00:00Z"))
-        })
+private func limit(_ kind: UsageReport.Limit.Kind, _ fraction: Double,
+                   resetsAt: Date? = nil, modelName: String? = nil,
+                   isActive: Bool = false) -> UsageReport.Limit {
+    UsageReport.Limit(kind: kind, fraction: fraction, severity: .normal,
+                      resetsAt: resetsAt, modelName: modelName, isActive: isActive)
+}
+
+private func officialSource(_ limits: [UsageReport.Limit], fetchedAt: Date,
+                            isLive: Bool = false) -> OfficialSource {
+    OfficialSource(report: UsageReport(limits: limits, fetchedAt: fetchedAt), isLive: isLive)
 }
 
 @Test func officialReadingWinsOverTheDerivedBlock() {
@@ -113,7 +113,9 @@ private func officialUsage(fiveHour: Double?, sevenDay: Double?,
         from: [event("2026-08-17T10:30:00Z", output: 500_000)],
         now: now, calendar: utc,
         override: Ceilings(blockTokens: 1_000_000),
-        official: officialUsage(fiveHour: 0.22, sevenDay: 0.19, fetchedAt: now))
+        official: officialSource([limit(.session, 0.22, resetsAt: date("2026-08-17T15:20:00Z")),
+                                  limit(.weeklyAll, 0.19)], fetchedAt: now),
+        status: .cached(age: 0))
 
     #expect(snapshot.session.isOfficial)
     #expect(snapshot.session.rawFraction == 0.22)
@@ -126,35 +128,130 @@ private func officialUsage(fiveHour: Double?, sevenDay: Double?,
     let snapshot = SnapshotBuilder.build(
         from: [event("2026-08-17T10:30:00Z", output: 500_000)],
         now: date("2026-08-17T12:00:00Z"), calendar: utc,
-        override: Ceilings(blockTokens: 1_000_000), official: nil)
+        override: Ceilings(blockTokens: 1_000_000), official: nil, status: .derivedOnly)
 
     #expect(snapshot.session.isOfficial == false)
+    #expect(snapshot.session.provenance == .derived)
     #expect(snapshot.session.rawFraction == 0.5)
     #expect(snapshot.weekly == nil)   // semanal não é derivável
+    #expect(snapshot.scopedWeekly.isEmpty)
 }
 
 @Test func weeklyExistsOnlyWithOfficialData() {
     let now = date("2026-08-17T12:00:00Z")
     let withOfficial = SnapshotBuilder.build(
-        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc,
-        override: nil, official: officialUsage(fiveHour: 0.22, sevenDay: 0.19, fetchedAt: now))
+        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.session, 0.22), limit(.weeklyAll, 0.19)],
+                                 fetchedAt: now),
+        status: .cached(age: 0))
     #expect(withOfficial.weekly?.rawFraction == 0.19)
 
-    // Janela ausente no arquivo (vem null com frequência) não vira zero.
+    // Janela ausente no payload (vem null com frequência) não vira zero.
     let partial = SnapshotBuilder.build(
-        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc,
-        override: nil, official: officialUsage(fiveHour: 0.22, sevenDay: nil, fetchedAt: now))
+        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.session, 0.22)], fetchedAt: now),
+        status: .cached(age: 0))
     #expect(partial.weekly == nil)
     #expect(partial.session.isOfficial)
 }
 
-@Test func officialGaugeReportsItsAge() {
+@Test func aReportWithoutASessionWindowLeavesTheSessionDerived() {
+    // O inverso de `weeklyExistsOnlyWithOfficialData`, e o estado que a UI
+    // precisa saber distinguir: cache antigo com `five_hour: null` produz
+    // relatório só com a semanal, e aí o snapshot tem procedências mistas —
+    // semanal oficial, sessão derivada do histórico local.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z", output: 500_000)],
+        now: now, calendar: utc,
+        override: Ceilings(blockTokens: 1_000_000),
+        official: officialSource([limit(.weeklyAll, 0.19)], fetchedAt: now),
+        status: .cached(age: 20 * 60))
+
+    #expect(snapshot.weekly?.provenance == .cached(at: now))
+    #expect(snapshot.session.provenance == .derived)
+    #expect(snapshot.session.rawFraction == 0.5)
+}
+
+@Test func cachedGaugeReportsItsAge() {
     let now = date("2026-08-17T12:00:00Z")
     let snapshot = SnapshotBuilder.build(
         from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc, override: nil,
-        official: officialUsage(fiveHour: 0.22, sevenDay: nil,
-                                fetchedAt: date("2026-08-17T11:45:00Z")))
+        official: officialSource([limit(.session, 0.22)],
+                                 fetchedAt: date("2026-08-17T11:45:00Z")),
+        status: .cached(age: 15 * 60))
     // Tipo explícito: `#expect` compara Optional<Double> com Int sem erro de
     // compilação e simplesmente devolve false.
     #expect(snapshot.session.age(at: now) == TimeInterval(15 * 60))
+}
+
+@Test func liveGaugeHasNoAgeToReport() {
+    // Ao vivo a idade é de segundos e não é informação. Mostrá-la produziria um
+    // "há 4s" permanente, que só ocupa espaço.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.session, 0.06)], fetchedAt: now, isLive: true),
+        status: .live(at: now))
+    #expect(snapshot.session.provenance == .live(at: now))
+    #expect(snapshot.session.age(at: now) == nil)
+}
+
+@Test func scopedWeeklyWindowsBecomeTheirOwnGauges() {
+    // O B da spec: a janela por modelo é genérica, rotulada pelo nome que o
+    // payload manda — o app não mantém lista de modelos.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc, override: nil,
+        official: officialSource([
+            limit(.session, 0.06),
+            limit(.weeklyScoped, 0.44, modelName: "Opus", isActive: true),
+            limit(.weeklyScoped, 0.12, modelName: "Fable"),
+        ], fetchedAt: now, isLive: true),
+        status: .live(at: now))
+
+    #expect(snapshot.scopedWeekly.map(\.modelName) == ["Opus", "Fable"])
+    #expect(snapshot.scopedWeekly.first?.gauge.rawFraction == 0.44)
+    #expect(snapshot.scopedWeekly.first?.gauge.isActive == true)
+}
+
+@Test func scopedWindowWithoutAModelNameIsDropped() {
+    // Sem nome não há rótulo, e uma barra anônima não diz de que é o teto.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.weeklyScoped, 0.44)], fetchedAt: now),
+        status: .cached(age: 0))
+    #expect(snapshot.scopedWeekly.isEmpty)
+}
+
+@Test func officialNumbersSurviveAnEmptyLocalHistory() {
+    // Sem isto, o `guard !events.isEmpty` no topo do build descartaria números
+    // oficiais perfeitamente válidos. Instalação nova, pasta de projetos limpa,
+    // ou uso do Claude Code em outra máquina: o app mostraria nada tendo dado
+    // ao vivo na mão. Fica mais provável justamente agora que a fonte ao vivo
+    // não depende mais de haver JSONL local.
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [], now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.session, 0.06, resetsAt: date("2026-08-17T15:20:00Z")),
+                                  limit(.weeklyAll, 0.25, isActive: true)],
+                                 fetchedAt: now, isLive: true),
+        status: .live(at: now))
+
+    #expect(snapshot.session.rawFraction == 0.06)
+    #expect(snapshot.weekly?.rawFraction == 0.25)
+    #expect(snapshot.sourceStatus == .live(at: now))
+    // Sem eventos locais não há custo a somar — isso continua zerado, e certo.
+    #expect(snapshot.today.tokens == 0)
+}
+
+@Test func theStatusTravelsWithTheSnapshot() {
+    let now = date("2026-08-17T12:00:00Z")
+    let snapshot = SnapshotBuilder.build(
+        from: [event("2026-08-17T10:30:00Z")], now: now, calendar: utc, override: nil,
+        official: officialSource([limit(.session, 0.35)],
+                                 fetchedAt: date("2026-08-16T23:00:00Z")),
+        status: .credentialExpired(age: 13 * 3600))
+    #expect(snapshot.sourceStatus == .credentialExpired(age: 13 * 3600))
 }

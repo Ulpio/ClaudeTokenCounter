@@ -56,6 +56,16 @@ public final class AppSettings {
         didSet { save() }
     }
 
+    /// Liga a busca ao vivo em `/api/oauth/usage`.
+    ///
+    /// Desligado por padrão, e por decisão explícita: ligado, o app lê o
+    /// `accessToken` que o Claude Code guarda no keychain. Depender da
+    /// credencial de outro app é escolha do usuário, e ausência de escolha não
+    /// pode ser lida como consentimento.
+    public var liveUsageEnabled: Bool {
+        didSet { save() }
+    }
+
     /// Plano lido do keychain, quando disponível. Exposto mesmo quando o
     /// usuário escolheu outro: a divergência é informação, não erro — a
     /// detecção pode estar desatualizada depois de um upgrade de plano.
@@ -74,6 +84,7 @@ public final class AppSettings {
         // corrompido não pode impedir o app de abrir.
         self.plan = stored?.plan ?? detected ?? .max20
         self.manualBlockCeiling = stored?.manualBlockCeiling
+        self.liveUsageEnabled = stored?.liveUsageEnabled ?? false
     }
 
     /// `true` quando a detecção discorda do que está selecionado — a UI avisa
@@ -90,10 +101,14 @@ public final class AppSettings {
     private struct Payload: Codable {
         var plan: Plan
         var manualBlockCeiling: UInt64?
+        /// Ausente em payload gravado antes deste campo existir. `nil` resolve
+        /// para `false` no init — nunca para ligado.
+        var liveUsageEnabled: Bool?
     }
 
     private func save() {
-        let payload = Payload(plan: plan, manualBlockCeiling: manualBlockCeiling)
+        let payload = Payload(plan: plan, manualBlockCeiling: manualBlockCeiling,
+                              liveUsageEnabled: liveUsageEnabled)
         guard let data = try? JSONEncoder().encode(payload) else { return }
         defaults.set(data, forKey: Self.storageKey)
     }

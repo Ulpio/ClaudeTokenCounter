@@ -3,21 +3,33 @@ import Foundation
 /// Tudo que a UI precisa desenhar, já calculado. Nenhuma shell conhece JSONL,
 /// bloco ou preço — só recebe isto.
 public struct UsageSnapshot: Sendable, Equatable {
-    /// Um medidor de janela. Pode vir da leitura oficial do Claude Code ou da
-    /// derivação local — e sabe qual dos dois é, porque a UI precisa dizer.
-    public struct Gauge: Sendable, Equatable {
+    /// De onde este medidor veio. Três estados, não dois: o cache do Claude
+    /// Code é oficial *e* pode estar horas defasado, e essas são perguntas
+    /// diferentes.
+    public enum Provenance: Sendable, Hashable {
+        case live(at: Date)
+        case cached(at: Date)
+        case derived
+    }
+
+    /// Um medidor de janela.
+    public struct Gauge: Sendable, Hashable {
         /// Razão real, sem saturação. Passa de 1 quando o consumo supera o
         /// denominador — e é aí que o número mais informa.
         public let rawFraction: Double
         public let resetsAt: Date?
-        /// Preenchido só no caminho oficial: quando o Claude Code buscou o dado.
-        public let officialFetchedAt: Date?
+        public let provenance: Provenance
+        /// Gravidade como o servidor a classifica. `nil` no caminho derivado,
+        /// que não tem servidor a consultar.
+        public let severity: UsageReport.Limit.Severity?
+        /// A janela que a Anthropic considera a que aperta agora.
+        public let isActive: Bool
         /// Tokens e teto existem apenas no caminho derivado; o oficial devolve
         /// percentual pronto e não expõe os absolutos.
         public let tokens: UInt64?
         public let ceiling: UInt64?
 
-        public var isOfficial: Bool { officialFetchedAt != nil }
+        public var isOfficial: Bool { provenance != .derived }
 
         /// Saturada em 1, para a barra de progresso — que não pode encher além
         /// do fim.
@@ -28,21 +40,42 @@ public struct UsageSnapshot: Sendable, Equatable {
             return max(0, resetsAt.timeIntervalSince(now))
         }
 
-        /// Há quanto tempo o dado oficial foi buscado. O cache só se move quando
-        /// o Claude Code roda, então a idade é parte do dado.
+        /// Há quanto tempo o dado foi buscado — **só faz sentido no cache**, que
+        /// só se move quando o Claude Code roda. Ao vivo a idade é de segundos e
+        /// mostrá-la produziria um "há 4s" permanente; derivado não tem busca.
         public func age(at now: Date) -> TimeInterval? {
-            officialFetchedAt.map { now.timeIntervalSince($0) }
+            guard case let .cached(at) = provenance else { return nil }
+            return max(0, now.timeIntervalSince(at))
         }
 
-        public static func official(fraction: Double, resetsAt: Date?, fetchedAt: Date) -> Gauge {
-            Gauge(rawFraction: fraction, resetsAt: resetsAt, officialFetchedAt: fetchedAt,
+        public static func official(_ limit: UsageReport.Limit,
+                                    from source: OfficialSource) -> Gauge {
+            Gauge(rawFraction: limit.fraction,
+                  resetsAt: limit.resetsAt,
+                  provenance: source.isLive
+                      ? .live(at: source.report.fetchedAt)
+                      : .cached(at: source.report.fetchedAt),
+                  severity: limit.severity,
+                  isActive: limit.isActive,
                   tokens: nil, ceiling: nil)
         }
 
         public static func derived(tokens: UInt64, ceiling: UInt64, resetsAt: Date?) -> Gauge {
             Gauge(rawFraction: ceiling > 0 ? Double(tokens) / Double(ceiling) : 0,
-                  resetsAt: resetsAt, officialFetchedAt: nil,
+                  resetsAt: resetsAt, provenance: .derived, severity: nil, isActive: false,
                   tokens: tokens, ceiling: ceiling)
+        }
+    }
+
+    /// Uma janela semanal presa a um modelo. O rótulo vem do payload — o app
+    /// não mantém lista de nomes de modelo, porque essa lista envelhece.
+    public struct ScopedGauge: Sendable, Hashable {
+        public let modelName: String
+        public let gauge: Gauge
+
+        public init(modelName: String, gauge: Gauge) {
+            self.modelName = modelName
+            self.gauge = gauge
         }
     }
 
@@ -52,6 +85,9 @@ public struct UsageSnapshot: Sendable, Equatable {
     /// Só existe com leitura oficial: a janela semanal da Anthropic tem reset
     /// próprio, que não dá para derivar do histórico local.
     public let weekly: Gauge?
+    /// Janelas semanais por modelo, na ordem do payload. Vazio quando não há
+    /// nenhuma — que é o caso mais comum.
+    public let scopedWeekly: [ScopedGauge]
     /// Comparação com o ritmo típico. Usada quando não há semanal oficial.
     public let weeklyPace: Pace
     public let today: Totals
@@ -62,14 +98,19 @@ public struct UsageSnapshot: Sendable, Equatable {
     /// Nomes crus de modelos sem preço conhecido — a UI mostra quais são.
     public let unknownModels: Set<String>
     public let generatedAt: Date
+    /// De onde vieram os números, incluindo os estados de falha. A UI diz isso
+    /// em vez de mostrar um número sem procedência.
+    public let sourceStatus: UsageSourceStatus
 
     public init(
-        session: Gauge, weekly: Gauge?, weeklyPace: Pace,
+        session: Gauge, weekly: Gauge?, scopedWeekly: [ScopedGauge], weeklyPace: Pace,
         today: Totals, week: Totals, month: Totals,
-        burnRatePerMinute: Double?, unknownModels: Set<String>, generatedAt: Date
+        burnRatePerMinute: Double?, unknownModels: Set<String>, generatedAt: Date,
+        sourceStatus: UsageSourceStatus
     ) {
         self.session = session
         self.weekly = weekly
+        self.scopedWeekly = scopedWeekly
         self.weeklyPace = weeklyPace
         self.today = today
         self.week = week
@@ -77,13 +118,16 @@ public struct UsageSnapshot: Sendable, Equatable {
         self.burnRatePerMinute = burnRatePerMinute
         self.unknownModels = unknownModels
         self.generatedAt = generatedAt
+        self.sourceStatus = sourceStatus
     }
 
     public static func empty(at now: Date) -> UsageSnapshot {
         UsageSnapshot(session: .derived(tokens: 0, ceiling: 1, resetsAt: nil),
                       weekly: nil,
+                      scopedWeekly: [],
                       weeklyPace: Pace(tokens: 0, typical: 0),
                       today: .zero, week: .zero, month: .zero,
-                      burnRatePerMinute: nil, unknownModels: [], generatedAt: now)
+                      burnRatePerMinute: nil, unknownModels: [], generatedAt: now,
+                      sourceStatus: .derivedOnly)
     }
 }
