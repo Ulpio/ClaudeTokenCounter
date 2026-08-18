@@ -38,6 +38,7 @@ public final class UsageStore {
     private var lastLive: Result<UsageReport, LiveUsageError>?
     private var lastLiveAttempt: Date?
     private var liveTicker: Task<Void, Never>?
+    private var isFetchingLive = false
 
     private var events: [UsageEvent] = []
     private var seenKeys = Set<String>()
@@ -108,8 +109,16 @@ public final class UsageStore {
 
     /// Busca os números ao vivo. Guarda o resultado — inclusive o erro — porque
     /// a política precisa distinguir "ainda não busquei" de "busquei e falhou".
+    ///
+    /// Uma por vez. O `await` abaixo suspende, e sem esta guarda duas invocações
+    /// se atropelam: a mais lenta termina por último e sobrescreve a mais nova.
+    /// Um `.failure` velho apagando um `.success` fresco deixaria o painel
+    /// dizendo "sem conexão" sobre um cache de horas até o tick seguinte — que
+    /// é exatamente o tipo de mentira que esta mudança existe para eliminar.
     public func refreshLive() async {
-        guard liveUsageEnabled else { return }
+        guard liveUsageEnabled, !isFetchingLive else { return }
+        isFetchingLive = true
+        defer { isFetchingLive = false }
         let now = Date()
         lastLiveAttempt = now
         do {
