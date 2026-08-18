@@ -11,8 +11,9 @@ struct ClaudeTokenCounterApp: App {
     /// redesenho quando `snapshot` muda vem do `@Observable` (cujo plugin de
     /// macro *está* no CLT), que rastreia o acesso à propriedade dentro do
     /// `body` — independentemente de como a referência é guardada.
-    @MainActor private static let store = UsageStore()
     @MainActor private static let settings = AppSettings()
+    @MainActor private static let store = UsageStore(
+        liveUsageEnabled: Self.settings.liveUsageEnabled)
     @MainActor private static let loginItem = LoginItem()
     @MainActor private static let form = SettingsFormState()
 
@@ -26,6 +27,7 @@ struct ClaudeTokenCounterApp: App {
     var body: some Scene {
         MenuBarExtra {
             UsagePanel(snapshot: Self.store.snapshot, plan: Self.settings.plan)
+                .onAppear { Self.store.panelDidOpen() }
         } label: {
             MenuBarLabel(snapshot: Self.store.snapshot)
         }
@@ -40,6 +42,9 @@ struct ClaudeTokenCounterApp: App {
                 // publicam a intenção do usuário e esta ponte a aplica.
                 .onChange(of: Self.settings.ceilingOverride) { _, override in
                     Self.store.ceilingOverride = override
+                }
+                .onChange(of: Self.settings.liveUsageEnabled) { _, enabled in
+                    Self.store.liveUsageEnabled = enabled
                 }
         }
     }

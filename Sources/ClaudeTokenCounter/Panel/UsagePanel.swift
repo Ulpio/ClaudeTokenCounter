@@ -35,24 +35,58 @@ struct UsagePanel: View {
                 paceRow(snapshot.weeklyPace)
             }
 
+            // Só as que dizem algo. Uma linha "Fable 0%" permanente é ruído: a
+            // janela existe no payload mas não informa nada.
+            ForEach(snapshot.scopedWeekly.filter { $0.gauge.isActive || $0.gauge.rawFraction > 0 },
+                    id: \.modelName) { scoped in
+                gauge(title: scoped.modelName,
+                      gauge: scoped.gauge,
+                      detail: resetDetail(scoped.gauge))
+            }
+
             if let rate = snapshot.burnRatePerMinute {
                 Text("\(Format.tokens(UInt64(rate)))/min")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            if snapshot.session.isOfficial {
-                Label("Números oficiais da sua conta", systemImage: "checkmark.seal")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            } else {
-                Label("Estimativa calibrada pelo seu histórico", systemImage: "info.circle")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+            provenanceRow
         }
         .padding(12)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
+    }
+
+    /// De onde vieram os números. Substitui o rótulo binário anterior, que só
+    /// sabia dizer "oficial" ou "estimado" — e chamava de oficial um cache que
+    /// podia estar treze horas atrasado.
+    private var provenanceRow: some View {
+        let (text, icon, isWarning) = provenance
+        return Label(text, systemImage: icon)
+            .font(.caption2)
+            .foregroundStyle(isWarning
+                             ? AnyShapeStyle(UsageColor.warning)
+                             : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
+    }
+
+    private var provenance: (String, String, Bool) {
+        switch snapshot.sourceStatus {
+        case .live:
+            return ("ao vivo", "bolt.horizontal.circle", false)
+        case let .cached(age):
+            // Uma hora é 20% de uma janela de 5h. Cache mais velho que isso já
+            // pode estar descrevendo uma sessão que resetou — foi exatamente o
+            // estado que mostrava 35% quando o valor real era 6%.
+            return age < 3600
+                ? ("cache do Claude Code · há \(Format.duration(age))", "clock", false)
+                : ("cache defasada · há \(Format.duration(age))", "exclamationmark.triangle", true)
+        case let .credentialExpired(age):
+            return ("credencial expirada · rode o Claude Code (cache de há \(Format.duration(age)))",
+                    "exclamationmark.triangle", true)
+        case let .liveUnavailable(age):
+            return ("sem conexão · cache de há \(Format.duration(age))", "wifi.slash", true)
+        case .derivedOnly:
+            return ("estimado do seu histórico", "info.circle", false)
+        }
     }
 
     private func resetDetail(_ gauge: UsageSnapshot.Gauge) -> String {
@@ -62,10 +96,6 @@ struct UsagePanel: View {
         var text = "reseta \(Format.clockTime(resetsAt))"
         if let remaining = gauge.timeRemaining(at: snapshot.generatedAt) {
             text += " · em \(Format.duration(remaining))"
-        }
-        // A idade importa: o cache oficial só se move quando o Claude Code roda.
-        if let age = gauge.age(at: snapshot.generatedAt), age > 120 {
-            text += " · lido há \(Format.duration(age))"
         }
         return text
     }

@@ -37,6 +37,18 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Números de uso") {
+                Toggle("Buscar ao vivo", isOn: $settings.liveUsageEnabled)
+                Text(settings.liveUsageEnabled
+                     ? "O app lê o token de acesso que o Claude Code guarda no keychain "
+                       + "e consulta a API da Anthropic a cada 5 minutos. O macOS pode "
+                       + "pedir autorização na primeira leitura."
+                     : "Desligado, o app usa o número que o Claude Code deixou em cache — "
+                       + "que só se atualiza quando ele roda, e pode estar horas atrasado.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Teto do bloco de 5h") {
                 Picker("", selection: $form.useManualCeiling) {
                     Text("Calibrar pelo histórico").tag(false)
