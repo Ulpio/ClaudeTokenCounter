@@ -28,7 +28,9 @@ enum Format {
         let total = Int(seconds)
         let hours = total / 3600
         let minutes = (total % 3600) / 60
-        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+        return hours > 0
+            ? String(format: String(localized: "format.duration.hoursMinutes"), hours, minutes)
+            : String(format: String(localized: "format.duration.minutes"), minutes)
     }
 
     static func clockTime(_ date: Date) -> String {
@@ -41,7 +43,7 @@ enum Format {
         formatter.currencyCode = "USD"
         formatter.maximumFractionDigits = 0
         let value = formatter.string(from: NSDecimalNumber(decimal: plan.monthlyPrice)) ?? ""
-        return "\(value)/mês"
+        return String(format: String(localized: "format.plan.price.format"), value)
     }
 
     static func percent(_ fraction: Double) -> String {

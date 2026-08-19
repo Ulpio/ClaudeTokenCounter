@@ -9,7 +9,7 @@ import CCUsageCore
 /// macro do SwiftUI e o plugin só acompanha o Xcode. Não se perde nada — o
 /// tooltip é o idioma que o macOS já usa para isto.
 private struct HelpTip: View {
-    let text: String
+    let text: LocalizedStringKey
 
     var body: some View {
         Image(systemName: "info.circle")
@@ -20,7 +20,7 @@ private struct HelpTip: View {
 
 /// Uma linha de controle: rótulo à esquerda, ajuda à direita.
 private struct ControlRow<Content: View>: View {
-    let help: String
+    let help: LocalizedStringKey
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -35,7 +35,7 @@ private struct ControlRow<Content: View>: View {
 /// Chip selecionável. `.button` porque a alternativa seria uma pilha de
 /// checkboxes ocupando uma linha cada.
 private struct Chip: View {
-    let label: String
+    let label: LocalizedStringKey
     let isOn: Bool
     let toggle: () -> Void
 
@@ -57,62 +57,50 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Plano") {
-                Picker("Assinatura", selection: $settings.plan) {
+            Section("settings.section.plan") {
+                Picker("settings.plan.subscription", selection: $settings.plan) {
                     ForEach(Plan.allCases, id: \.self) { plan in
-                        Text("\(plan.label) — \(Format.planPrice(plan))").tag(plan)
+                        Text(verbatim: "\(plan.label) — \(Format.planPrice(plan))").tag(plan)
                     }
                 }
                 .pickerStyle(.inline)
                 if let detected = settings.detectedPlan {
                     Label(settings.planDisagreesWithDetection
-                          ? "Sua conta indica \(detected.label)."
-                          : "Detectado pela sua conta.",
+                          ? String(format: String(localized: "settings.plan.disagrees.format"),
+                                   detected.label)
+                          : String(localized: "settings.plan.detected"),
                           systemImage: settings.planDisagreesWithDetection
                           ? "exclamationmark.triangle" : "checkmark.circle")
                         .font(.caption)
                         .foregroundStyle(settings.planDisagreesWithDetection
                                          ? UsageColor.warning : .secondary)
                         .help(settings.planDisagreesWithDetection
-                              ? "A detecção lê o plano do keychain do Claude Code. Sua "
-                                + "seleção manual está sobrescrevendo — o que é o certo "
-                                + "se você mudou de plano há pouco."
-                              : "Lido do keychain do Claude Code.")
+                              ? String(localized: "settings.plan.disagrees.help")
+                              : String(localized: "settings.plan.detected.help"))
                 } else {
-                    Label("Não foi possível ler o plano — selecione manualmente.",
-                          systemImage: "questionmark.circle")
+                    Label("settings.plan.unknown", systemImage: "questionmark.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("Números de uso") {
-                ControlRow(help: "Ligado, o app lê o token de acesso que o Claude Code "
-                           + "guarda no keychain e consulta a mesma API que ele consulta, "
-                           + "a cada 5 minutos. O macOS pode pedir autorização na primeira "
-                           + "leitura.\n\nDesligado, o app usa o número que o Claude Code "
-                           + "deixou em cache — que só se move quando ele roda, e já foi "
-                           + "medido 13 horas atrasado.") {
-                    Toggle("Buscar ao vivo", isOn: $settings.liveUsageEnabled)
+            Section("settings.section.usage") {
+                ControlRow(help: "settings.live.help") {
+                    Toggle("settings.live.toggle", isOn: $settings.liveUsageEnabled)
                 }
-                Text(settings.liveUsageEnabled
-                     ? "Consulta a API a cada 5 minutos."
-                     : "Usando o cache do Claude Code, que pode estar horas atrasado.")
+                Text(settings.liveUsageEnabled ? "settings.live.on" : "settings.live.off")
                     .font(.caption)
                     .foregroundStyle(settings.liveUsageEnabled ? .secondary : UsageColor.warning)
             }
 
-            Section("Alertas") {
-                ControlRow(help: "Notifica ao passar de um limiar de consumo. O alerta "
-                           + "só sai com a busca ao vivo ligada: sobre o cache, ele "
-                           + "erraria nos dois sentidos — e o pior deles é o silêncio "
-                           + "enquanto você estoura o teto.") {
-                    Toggle("Avisar ao aproximar do teto",
+            Section("settings.section.alerts") {
+                ControlRow(help: "settings.alerts.thresholds.help") {
+                    Toggle("settings.alerts.thresholds.toggle",
                            isOn: $settings.alerts.thresholdsEnabled)
                 }
 
                 if settings.alerts.thresholdsEnabled {
-                    LabeledContent("Limiares") {
+                    LabeledContent("settings.alerts.thresholds.label") {
                         HStack(spacing: 6) {
                             ForEach(AlertPreferences.offeredThresholds, id: \.self) { value in
                                 Chip(label: "\(value)%",
@@ -123,29 +111,26 @@ struct SettingsView: View {
                         }
                     }
                     if settings.alerts.thresholds.isEmpty {
-                        Label("Nenhum limiar selecionado — nada será avisado.",
+                        Label("settings.alerts.thresholds.empty",
                               systemImage: "exclamationmark.triangle")
                             .font(.caption)
                             .foregroundStyle(UsageColor.warning)
                     }
                 }
 
-                ControlRow(help: "Avisa quando a janela reseta e a capacidade volta — é "
-                           + "quando dá para retomar trabalho pesado. Não vira ruído de "
-                           + "madrugada: parando de usar o Claude Code, a janela deixa de "
-                           + "ser substituída por outra ativa e o aviso não acontece.") {
-                    Toggle("Avisar quando a janela resetar",
+                ControlRow(help: "settings.alerts.reset.help") {
+                    Toggle("settings.alerts.reset.toggle",
                            isOn: $settings.alerts.resetEnabled)
                 }
 
                 if settings.alerts.anyEnabled {
-                    LabeledContent("Janelas") {
+                    LabeledContent("settings.alerts.windows.label") {
                         HStack(spacing: 6) {
-                            Chip(label: "5 horas",
+                            Chip(label: "settings.alerts.window.session",
                                  isOn: settings.alerts.windows.contains(.session)) {
                                 toggleWindow(.session)
                             }
-                            Chip(label: "semanal",
+                            Chip(label: "settings.alerts.window.weekly",
                                  isOn: settings.alerts.windows.contains(.weekly)) {
                                 toggleWindow(.weekly)
                             }
@@ -156,21 +141,20 @@ struct SettingsView: View {
                     // pior é o silêncio enquanto o usuário estoura. Em vez de
                     // notificar mal, a tela oferece a saída.
                     if !settings.liveUsageEnabled {
-                        Label("Alertas precisam da busca ao vivo.",
+                        Label("settings.alerts.needsLive",
                               systemImage: "exclamationmark.triangle")
                             .font(.caption)
                             .foregroundStyle(UsageColor.warning)
-                        Button("Ligar busca ao vivo") { settings.liveUsageEnabled = true }
+                        Button("settings.alerts.enableLive") { settings.liveUsageEnabled = true }
                             .controlSize(.small)
                     }
 
                     // Uma chave ligada sobre permissão negada é uma chave que mente.
                     if alerts.isDenied {
-                        Label("Notificações negadas nos Ajustes do Sistema.",
-                              systemImage: "bell.slash")
+                        Label("settings.alerts.denied", systemImage: "bell.slash")
                             .font(.caption)
                             .foregroundStyle(UsageColor.critical)
-                        Button("Abrir Ajustes do Sistema") {
+                        Button("settings.alerts.openSystem") {
                             guard let url = URL(string:
                                 "x-apple.systempreferences:com.apple.preference.notifications")
                             else { return }
@@ -181,29 +165,28 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Teto do bloco de 5h") {
+            Section("settings.section.ceiling") {
                 Picker("", selection: $form.useManualCeiling) {
-                    Text("Calibrar pelo histórico").tag(false)
-                    Text("Definir manualmente").tag(true)
+                    Text("settings.ceiling.calibrate").tag(false)
+                    Text("settings.ceiling.manual").tag(true)
                 }
                 .pickerStyle(.inline)
                 .labelsHidden()
 
                 if form.useManualCeiling {
-                    TextField("Tokens", text: $form.ceilingDraft)
+                    TextField("settings.ceiling.tokens", text: $form.ceilingDraft)
                         .onSubmit { form.commit(to: settings) }
                 }
-                ControlRow(help: "A Anthropic não publica os limites do plano, então o "
-                           + "teto não é lido de lugar nenhum: é o maior consumo que o "
-                           + "app já observou num bloco de 5h completo do seu histórico.") {
-                    Text("Calibrado: \(Format.tokens(calibratedCeiling)) tokens")
+                ControlRow(help: "settings.ceiling.help") {
+                    Text(String(format: String(localized: "settings.ceiling.calibrated.format"),
+                                Format.tokens(calibratedCeiling)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("Sistema") {
-                Toggle("Abrir no login", isOn: Binding(
+            Section("settings.section.system") {
+                Toggle("settings.system.loginItem", isOn: Binding(
                     get: { loginItem.isEnabled },
                     set: { loginItem.setEnabled($0) }))
                 if let explanation = loginItem.explanation {

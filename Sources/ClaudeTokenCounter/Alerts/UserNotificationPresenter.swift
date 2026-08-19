@@ -30,33 +30,39 @@ struct UserNotificationPresenter: AlertPresenting {
         case let .threshold(window, percent, resetsAt):
             switch window {
             case .session:
-                ("\(percent)% da janela de 5h", sessionReset(resetsAt))
+                (String(format: String(localized: "alerts.threshold.session.title.format"), percent),
+                 sessionReset(resetsAt))
             case .weekly:
-                ("\(percent)% da janela semanal", weeklyReset(resetsAt))
+                (String(format: String(localized: "alerts.threshold.weekly.title.format"), percent),
+                 weeklyReset(resetsAt))
             }
         case let .windowReset(window):
             switch window {
-            case .session: ("Janela de 5h resetou", "Capacidade cheia de novo.")
-            case .weekly: ("Janela semanal resetou", "Capacidade cheia de novo.")
+            case .session:
+                (String(localized: "alerts.reset.session.title"),
+                 String(localized: "alerts.reset.body"))
+            case .weekly:
+                (String(localized: "alerts.reset.weekly.title"),
+                 String(localized: "alerts.reset.body"))
             }
         case .liveRequired:
-            ("Alertas precisam da busca ao vivo",
-             "Sem ela o app lê o cache do Claude Code, que pode estar horas "
-             + "atrasado — e um alerta em cima disso erra nos dois sentidos. "
-             + "Ligue em Ajustes → Números de uso.")
+            (String(localized: "alerts.liveRequired.title"),
+             String(localized: "alerts.liveRequired.body"))
         }
     }
 
     private static func sessionReset(_ resetsAt: Date?) -> String {
         guard let resetsAt else { return "" }
         let remaining = max(0, resetsAt.timeIntervalSince(Date()))
-        return "Reseta às \(Format.clockTime(resetsAt)), em \(Format.duration(remaining))."
+        return String(format: String(localized: "alerts.session.body.format"),
+                      Format.clockTime(resetsAt), Format.duration(remaining))
     }
 
     /// A semanal reseta daqui a dias, então hora sozinha não localiza nada.
     private static func weeklyReset(_ resetsAt: Date?) -> String {
         guard let resetsAt else { return "" }
-        return "Reseta \(resetsAt.formatted(date: .abbreviated, time: .shortened))."
+        return String(format: String(localized: "alerts.weekly.body.format"),
+                      resetsAt.formatted(date: .abbreviated, time: .shortened))
     }
 
     /// Identificador estável em vez de aleatório: se o mesmo alerta for

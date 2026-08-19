@@ -24,5 +24,9 @@ INTEROP="$DEV/Library/Developer/usr/lib"
 [ -d "$FRAMEWORKS" ] && ARGS+=(-Xlinker -rpath -Xlinker "$FRAMEWORKS")
 [ -d "$INTEROP" ]    && ARGS+=(-Xlinker -rpath -Xlinker "$INTEROP")
 
+# Catálogos antes dos testes: chave sem tradução não quebra compilação nem teste,
+# só aparece crua para o usuário. Aqui é onde isso vira erro.
+"$ROOT/Scripts/check-strings.sh"
+
 # ${ARGS[@]+...} protege contra array vazio sob `set -u` no bash 3.2 do macOS.
 exec swift test --package-path "$ROOT" ${ARGS[@]+"${ARGS[@]}"} "$@"

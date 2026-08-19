@@ -27,6 +27,9 @@ echo "==> Building release binary (universal)"
 swift build -c release --package-path "$ROOT" "${ARCHS[@]}"
 BIN="$(swift build -c release --package-path "$ROOT" "${ARCHS[@]}" --show-bin-path)/$APP_NAME"
 
+echo "==> Checking strings"
+"$ROOT/Scripts/check-strings.sh" >/dev/null
+
 echo "==> Generating icon"
 "$ROOT/Scripts/icon.sh" >/dev/null
 
@@ -35,6 +38,12 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp "$DIST/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+
+# Os .lproj vão para dentro do bundle montado à mão. Ficam fora de Sources/ de
+# propósito: o SwiftPM reclama de arquivo solto num target que ele não sabe
+# tratar, e aqui não há target que os declare — quem monta o bundle é este
+# script.
+cp -R "$ROOT"/Resources/*.lproj "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -46,6 +55,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundleExecutable</key><string>$APP_NAME</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
+    <!-- Inglês como base: quem estiver num idioma sem tradução recebe inglês,
+         não português. O fallback tem que ser o que mais gente consegue ler. -->
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleVersion</key><string>$VERSION</string>

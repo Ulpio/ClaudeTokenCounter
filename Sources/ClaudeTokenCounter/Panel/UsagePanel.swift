@@ -27,14 +27,14 @@ struct UsagePanel: View {
 
     private var sessionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("SESSÃO")
+            sectionTitle("panel.section.session")
 
-            gauge(title: "Atual",
+            gauge(title: String(localized: "panel.gauge.current"),
                   gauge: snapshot.session,
                   detail: resetDetail(snapshot.session))
 
             if let weekly = snapshot.weekly {
-                gauge(title: "Semanal", gauge: weekly, detail: resetDetail(weekly))
+                gauge(title: String(localized: "panel.gauge.weekly"), gauge: weekly, detail: resetDetail(weekly))
             } else {
                 paceRow(snapshot.weeklyPace)
             }
@@ -49,7 +49,8 @@ struct UsagePanel: View {
             }
 
             if let rate = snapshot.burnRatePerMinute {
-                Text("\(Format.tokens(UInt64(rate)))/min")
+                Text(String(format: String(localized: "panel.burnRate.format"),
+                            Format.tokens(UInt64(rate))))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -72,7 +73,7 @@ struct UsagePanel: View {
                                  ? AnyShapeStyle(UsageColor.warning)
                                  : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
             if offersLiveUsage {
-                Button("Ligar ao vivo", action: onEnableLive)
+                Button("panel.enableLive", action: onEnableLive)
                     .buttonStyle(.link)
                     .font(.caption2)
             }
@@ -96,33 +97,38 @@ struct UsagePanel: View {
     private var provenance: (String, String, Bool) {
         switch snapshot.sourceStatus {
         case .live:
-            return ("ao vivo", "bolt.horizontal.circle", false)
+            return (String(localized: "panel.provenance.live"), "bolt.horizontal.circle", false)
         case let .cached(age):
             // Uma hora é 20% de uma janela de 5h. Cache mais velho que isso já
             // pode estar descrevendo uma sessão que resetou — foi exatamente o
             // estado que mostrava 35% quando o valor real era 6%.
             return age < 3600
-                ? ("cache do Claude Code · há \(Format.duration(age))", "clock", false)
-                : ("cache defasada · há \(Format.duration(age))", "exclamationmark.triangle", true)
+                ? (String(format: String(localized: "panel.provenance.cached.format"),
+                          Format.duration(age)), "clock", false)
+                : (String(format: String(localized: "panel.provenance.stale.format"),
+                          Format.duration(age)), "exclamationmark.triangle", true)
         case let .credentialExpired(age):
-            return ("credencial expirada · rode o Claude Code (cache de há \(Format.duration(age)))",
-                    "exclamationmark.triangle", true)
+            return (String(format: String(localized: "panel.provenance.expired.format"),
+                           Format.duration(age)), "exclamationmark.triangle", true)
         case let .liveUnavailable(age):
-            return ("sem conexão · cache de há \(Format.duration(age))", "wifi.slash", true)
+            return (String(format: String(localized: "panel.provenance.offline.format"),
+                           Format.duration(age)), "wifi.slash", true)
         case .derivedOnly:
-            return ("estimado do seu histórico", "info.circle", false)
+            return (String(localized: "panel.provenance.derived"), "info.circle", false)
         }
     }
 
     private func resetDetail(_ gauge: UsageSnapshot.Gauge) -> String {
         var text: String
         if let resetsAt = gauge.resetsAt {
-            text = "reseta \(Format.clockTime(resetsAt))"
+            text = String(format: String(localized: "panel.reset.format"),
+                          Format.clockTime(resetsAt))
             if let remaining = gauge.timeRemaining(at: snapshot.generatedAt) {
-                text += " · em \(Format.duration(remaining))"
+                text = String(format: String(localized: "panel.reset.remaining.format"),
+                              text, Format.duration(remaining))
             }
         } else {
-            text = gauge.isOfficial ? "" : "nenhuma sessão ativa"
+            text = gauge.isOfficial ? "" : String(localized: "panel.reset.noSession")
         }
 
         // Um snapshot pode ter procedências mistas: a semanal vem do relatório
@@ -134,7 +140,9 @@ struct UsagePanel: View {
         // anterior estampava a idade por medidor e não tinha esse buraco; a
         // linha única é melhor, mas precisa disto para não mentir.
         if gauge.provenance == .derived, snapshot.sourceStatus != .derivedOnly {
-            text = text.isEmpty ? "estimado do seu histórico" : text + " · estimado"
+            text = text.isEmpty
+                ? String(localized: "panel.provenance.derived")
+                : String(format: String(localized: "panel.reset.estimatedSuffix.format"), text)
         }
         return text
     }
@@ -144,19 +152,21 @@ struct UsagePanel: View {
     private func paceRow(_ pace: Pace) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text("Semanal").font(.callout)
+                Text("panel.gauge.weekly").font(.callout)
                 Spacer()
                 if let multiple = pace.multiple {
                     Text(String(format: "%.1f×", multiple))
                         .font(.callout.monospacedDigit())
                         .foregroundStyle(multiple >= 2 ? UsageColor.warning : .primary)
                 } else {
-                    Text("—").font(.callout).foregroundStyle(.secondary)
+                    Text(verbatim: "—").font(.callout).foregroundStyle(.secondary)
                 }
             }
             Text(pace.multiple == nil
-                 ? "\(Format.tokens(pace.tokens)) nos últimos 7 dias"
-                 : "\(Format.tokens(pace.tokens)) · típico \(Format.tokens(pace.typical))")
+                 ? String(format: String(localized: "panel.pace.recent.format"),
+                          Format.tokens(pace.tokens))
+                 : String(format: String(localized: "panel.pace.typical.format"),
+                          Format.tokens(pace.tokens), Format.tokens(pace.typical)))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -186,11 +196,11 @@ struct UsagePanel: View {
 
     private var valueSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("VALOR")
+            sectionTitle("panel.section.value")
             HStack(alignment: .top, spacing: 0) {
-                column("HOJE", snapshot.today)
-                column("SEMANA", snapshot.week)
-                column("MÊS", snapshot.month)
+                column("panel.column.today", snapshot.today)
+                column("panel.column.week", snapshot.week)
+                column("panel.column.month", snapshot.month)
             }
             returnRow
         }
@@ -205,7 +215,10 @@ struct UsagePanel: View {
         if let multiple = plan.returnMultiple(forMonthly: snapshot.month.money) {
             Divider()
             HStack(spacing: 4) {
-                Text("\(plan.label) · \(Format.planPrice(plan))")
+                // `verbatim`: os dois pedaços já vêm localizados, e o
+                // separador não é texto a traduzir. Sem isto o SwiftUI procura
+                // uma chave "%@ · %@" que não existe.
+                Text(verbatim: "\(plan.label) · \(Format.planPrice(plan))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -215,14 +228,14 @@ struct UsagePanel: View {
                      + (snapshot.month.money.isPartial ? "+" : ""))
                     .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(multiple >= 1 ? UsageColor.calm : .secondary)
-                Text("de retorno")
+                Text("panel.return.suffix")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
     }
 
-    private func column(_ title: String, _ totals: Totals) -> some View {
+    private func column(_ title: LocalizedStringKey, _ totals: Totals) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
             Text(Format.tokens(totals.tokens)).font(.callout.monospacedDigit())
@@ -234,14 +247,15 @@ struct UsagePanel: View {
 
     // MARK: - Rodapé
 
-    private func sectionTitle(_ text: String) -> some View {
+    private func sectionTitle(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.secondary)
     }
 
     private var unknownModelsNotice: some View {
-        Label("Sem preço conhecido: \(snapshot.unknownModels.sorted().joined(separator: ", "))",
+        Label(String(format: String(localized: "panel.unknownModels.format"),
+                     snapshot.unknownModels.sorted().joined(separator: ", ")),
               systemImage: "exclamationmark.triangle")
             .font(.caption2)
             .foregroundStyle(.orange)
@@ -250,7 +264,7 @@ struct UsagePanel: View {
     private var footer: some View {
         HStack {
             SettingsLink {
-                Label("Ajustes", systemImage: "gearshape")
+                Label("panel.settings", systemImage: "gearshape")
             }
             // O app é `LSUIElement`: não tem Dock e nunca se ativa sozinho.
             // `SettingsLink` cria a janela, mas sem ativação ela nasce atrás de
@@ -267,7 +281,7 @@ struct UsagePanel: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             Spacer()
-            Button("Sair") { NSApplication.shared.terminate(nil) }
+            Button("panel.quit") { NSApplication.shared.terminate(nil) }
                 .buttonStyle(.plain)
                 .font(.caption)
                 .foregroundStyle(.secondary)

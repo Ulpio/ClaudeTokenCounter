@@ -1,0 +1,89 @@
+/* Painel — seções e medidores */
+"panel.section.session" = "SESSÃO";
+"panel.section.value" = "VALOR";
+"panel.gauge.current" = "Atual";
+"panel.gauge.weekly" = "Semanal";
+"panel.burnRate.format" = "%@/min";
+"panel.pace.recent.format" = "%1$@ nos últimos 7 dias";
+"panel.pace.typical.format" = "%1$@ · típico %2$@";
+"panel.column.today" = "HOJE";
+"panel.column.week" = "SEMANA";
+"panel.column.month" = "MÊS";
+"panel.return.suffix" = "de retorno";
+"panel.unknownModels.format" = "Sem preço conhecido: %@";
+"panel.settings" = "Ajustes";
+"panel.quit" = "Sair";
+"panel.enableLive" = "Ligar ao vivo";
+
+/* Painel — de onde veio o número */
+"panel.provenance.live" = "ao vivo";
+"panel.provenance.cached.format" = "cache do Claude Code · há %@";
+"panel.provenance.stale.format" = "cache defasada · há %@";
+"panel.provenance.expired.format" = "credencial expirada · rode o Claude Code (cache de há %@)";
+"panel.provenance.offline.format" = "sem conexão · cache de há %@";
+"panel.provenance.derived" = "estimado do seu histórico";
+
+/* Painel — reset das janelas */
+"panel.reset.format" = "reseta %@";
+"panel.reset.remaining.format" = "%1$@ · em %2$@";
+"panel.reset.noSession" = "nenhuma sessão ativa";
+"panel.reset.estimatedSuffix.format" = "%@ · estimado";
+
+/* Formatadores */
+"format.duration.hoursMinutes" = "%1$dh %2$dm";
+"format.duration.minutes" = "%dm";
+"format.plan.price.format" = "%@/mês";
+
+/* Notificações */
+"alerts.threshold.session.title.format" = "%d%% da janela de 5h";
+"alerts.threshold.weekly.title.format" = "%d%% da janela semanal";
+"alerts.session.body.format" = "Reseta às %1$@, em %2$@.";
+"alerts.weekly.body.format" = "Reseta %@.";
+"alerts.reset.session.title" = "Janela de 5h resetou";
+"alerts.reset.weekly.title" = "Janela semanal resetou";
+"alerts.reset.body" = "Capacidade cheia de novo.";
+"alerts.liveRequired.title" = "Alertas precisam da busca ao vivo";
+"alerts.liveRequired.body" = "Sem ela o app lê o cache do Claude Code, que pode estar horas atrasado — e um alerta em cima disso erra nos dois sentidos. Ligue em Ajustes → Números de uso.";
+
+/* Ajustes — plano */
+"settings.section.plan" = "Plano";
+"settings.plan.subscription" = "Assinatura";
+"settings.plan.detected" = "Detectado pela sua conta.";
+"settings.plan.detected.help" = "Lido do keychain do Claude Code.";
+"settings.plan.disagrees.format" = "Sua conta indica %@.";
+"settings.plan.disagrees.help" = "A detecção lê o plano do keychain do Claude Code. Sua seleção manual está sobrescrevendo — o que é o certo se você mudou de plano há pouco.";
+"settings.plan.unknown" = "Não foi possível ler o plano — selecione manualmente.";
+
+/* Ajustes — números de uso */
+"settings.section.usage" = "Números de uso";
+"settings.live.toggle" = "Buscar ao vivo";
+"settings.live.help" = "Ligado, o app lê o token de acesso que o Claude Code guarda no keychain e consulta a mesma API que ele consulta, a cada 5 minutos. O macOS pode pedir autorização na primeira leitura.\n\nDesligado, o app usa o número que o Claude Code deixou em cache — que só se move quando ele roda, e já foi medido 13 horas atrasado.";
+"settings.live.on" = "Consulta a API a cada 5 minutos.";
+"settings.live.off" = "Usando o cache do Claude Code, que pode estar horas atrasado.";
+
+/* Ajustes — alertas */
+"settings.section.alerts" = "Alertas";
+"settings.alerts.thresholds.toggle" = "Avisar ao aproximar do teto";
+"settings.alerts.thresholds.help" = "Notifica ao passar de um limiar de consumo. O alerta só sai com a busca ao vivo ligada: sobre o cache, ele erraria nos dois sentidos — e o pior deles é o silêncio enquanto você estoura o teto.";
+"settings.alerts.thresholds.label" = "Limiares";
+"settings.alerts.thresholds.empty" = "Nenhum limiar selecionado — nada será avisado.";
+"settings.alerts.reset.toggle" = "Avisar quando a janela resetar";
+"settings.alerts.reset.help" = "Avisa quando a janela reseta e a capacidade volta — é quando dá para retomar trabalho pesado. Não vira ruído de madrugada: parando de usar o Claude Code, a janela deixa de ser substituída por outra ativa e o aviso não acontece.";
+"settings.alerts.windows.label" = "Janelas";
+"settings.alerts.window.session" = "5 horas";
+"settings.alerts.window.weekly" = "semanal";
+"settings.alerts.needsLive" = "Alertas precisam da busca ao vivo.";
+"settings.alerts.enableLive" = "Ligar busca ao vivo";
+"settings.alerts.denied" = "Notificações negadas nos Ajustes do Sistema.";
+"settings.alerts.openSystem" = "Abrir Ajustes do Sistema";
+
+/* Ajustes — teto e sistema */
+"settings.section.ceiling" = "Teto do bloco de 5h";
+"settings.ceiling.calibrate" = "Calibrar pelo histórico";
+"settings.ceiling.manual" = "Definir manualmente";
+"settings.ceiling.tokens" = "Tokens";
+"settings.ceiling.calibrated.format" = "Calibrado: %@ tokens";
+"settings.ceiling.help" = "A Anthropic não publica os limites do plano, então o teto não é lido de lugar nenhum: é o maior consumo que o app já observou num bloco de 5h completo do seu histórico.";
+"settings.section.system" = "Sistema";
+"settings.system.loginItem" = "Abrir no login";
+"settings.system.loginItem.failure.format" = "Não foi possível registrar: %@. Apps assinados ad-hoc costumam precisar estar em /Applications.";

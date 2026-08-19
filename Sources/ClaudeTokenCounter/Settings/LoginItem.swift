@@ -44,7 +44,7 @@ final class LoginItem {
     /// Texto explicativo quando o sistema recusou o registro.
     var explanation: String? {
         guard let failure else { return nil }
-        return "Não foi possível registrar: \(failure). "
-            + "Apps assinados ad-hoc costumam precisar estar em /Applications."
+        return String(format: String(localized: "settings.system.loginItem.failure.format"),
+                      "\(failure)")
     }
 }
