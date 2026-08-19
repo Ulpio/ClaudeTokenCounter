@@ -7,6 +7,13 @@ import Observation
 @Observable
 public final class UsageStore {
     public private(set) var snapshot: UsageSnapshot
+
+    /// Chamado a cada snapshot publicado. Existe para os alertas, e o store
+    /// segue sem saber que notificação existe — ele entrega o fato e pronto.
+    ///
+    /// `@ObservationIgnored` porque é colaborador, não estado observável:
+    /// sem isso, atribuir o gancho invalidaria views que leem o store.
+    @ObservationIgnored public var onSnapshot: (@MainActor (UsageSnapshot) -> Void)?
     public private(set) var isLoading = false
 
     /// Teto manual das settings; `nil` usa a calibração automática.
@@ -201,5 +208,6 @@ public final class UsageStore {
         snapshot = SnapshotBuilder.build(
             from: events, now: now, calendar: .current,
             override: ceilingOverride, official: official, status: status)
+        onSnapshot?(snapshot)
     }
 }

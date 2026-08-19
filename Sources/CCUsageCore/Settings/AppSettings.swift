@@ -66,6 +66,15 @@ public final class AppSettings {
         didSet { save() }
     }
 
+    /// Liga as notificações de consumo.
+    ///
+    /// Desligado por padrão: notificação é interrupção, e interrupção não pode
+    /// ser o estado inicial de nada. Ligar dispara o pedido de permissão do
+    /// sistema — que é o momento certo para pedir, porque aí há contexto.
+    public var alertsEnabled: Bool {
+        didSet { save() }
+    }
+
     /// Plano lido do keychain, quando disponível. Exposto mesmo quando o
     /// usuário escolheu outro: a divergência é informação, não erro — a
     /// detecção pode estar desatualizada depois de um upgrade de plano.
@@ -85,6 +94,7 @@ public final class AppSettings {
         self.plan = stored?.plan ?? detected ?? .max20
         self.manualBlockCeiling = stored?.manualBlockCeiling
         self.liveUsageEnabled = stored?.liveUsageEnabled ?? false
+        self.alertsEnabled = stored?.alertsEnabled ?? false
     }
 
     /// `true` quando a detecção discorda do que está selecionado — a UI avisa
@@ -104,11 +114,14 @@ public final class AppSettings {
         /// Ausente em payload gravado antes deste campo existir. `nil` resolve
         /// para `false` no init — nunca para ligado.
         var liveUsageEnabled: Bool?
+        /// Idem: ausente em payload gravado antes deste campo existir.
+        var alertsEnabled: Bool?
     }
 
     private func save() {
         let payload = Payload(plan: plan, manualBlockCeiling: manualBlockCeiling,
-                              liveUsageEnabled: liveUsageEnabled)
+                              liveUsageEnabled: liveUsageEnabled,
+                              alertsEnabled: alertsEnabled)
         guard let data = try? JSONEncoder().encode(payload) else { return }
         defaults.set(data, forKey: Self.storageKey)
     }

@@ -16,11 +16,15 @@ struct ClaudeTokenCounterApp: App {
         liveUsageEnabled: Self.settings.liveUsageEnabled)
     @MainActor private static let loginItem = LoginItem()
     @MainActor private static let form = SettingsFormState()
+    @MainActor private static let alerts = AlertCoordinator(settings: Self.settings)
 
     init() {
         // A varredura inicial roda em task destacada, então a menu bar aparece
         // imediatamente e o painel preenche quando o disco termina de ser lido.
         Self.store.ceilingOverride = Self.settings.ceilingOverride
+        // O gancho antes do start: a primeira reconstrução já estabelece a
+        // linha de base da política, em vez de a política começar cega.
+        Self.store.onSnapshot = { snapshot in Self.alerts.handle(snapshot) }
         Self.store.start()
     }
 
@@ -37,6 +41,7 @@ struct ClaudeTokenCounterApp: App {
             SettingsView(settings: Self.settings,
                          form: Self.form,
                          loginItem: Self.loginItem,
+                         alerts: Self.alerts,
                          calibratedCeiling: Self.store.snapshot.calibratedBlockCeiling)
                 // O store é a única fonte do denominador; as settings só
                 // publicam a intenção do usuário e esta ponte a aplica.
@@ -45,6 +50,9 @@ struct ClaudeTokenCounterApp: App {
                 }
                 .onChange(of: Self.settings.liveUsageEnabled) { _, enabled in
                     Self.store.liveUsageEnabled = enabled
+                }
+                .onChange(of: Self.settings.alertsEnabled) { _, enabled in
+                    Self.alerts.alertsEnabledChanged(to: enabled)
                 }
         }
     }

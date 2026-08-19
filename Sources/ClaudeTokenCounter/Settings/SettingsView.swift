@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import CCUsageCore
 
@@ -5,6 +6,7 @@ struct SettingsView: View {
     @Bindable var settings: AppSettings
     @Bindable var form: SettingsFormState
     let loginItem: LoginItem
+    let alerts: AlertCoordinator
     /// Teto que a calibração automática encontrou — mostrado como referência
     /// para o campo manual não ser preenchido no escuro.
     let calibratedCeiling: UInt64
@@ -49,6 +51,39 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Alertas") {
+                Toggle("Avisar ao aproximar do teto", isOn: $settings.alertsEnabled)
+                Text("Notifica ao passar de 80% e de 95% da janela de 5h e da semanal, "
+                     + "e avisa quando a janela reseta — só se você tiver encostado no teto.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                // Alerta sobre cache defasada erraria nos dois sentidos, e o
+                // pior deles é o silêncio enquanto o usuário estoura. Então em
+                // vez de notificar mal, a tela oferece a saída.
+                if settings.alertsEnabled && !settings.liveUsageEnabled {
+                    Label("Alertas precisam da busca ao vivo — sem ela o número pode "
+                          + "estar horas atrasado.", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(UsageColor.warning)
+                    Button("Ligar busca ao vivo") { settings.liveUsageEnabled = true }
+                }
+
+                // Uma chave ligada sobre permissão negada é uma chave que mente.
+                if settings.alertsEnabled && alerts.isDenied {
+                    Label("Notificações negadas nos Ajustes do Sistema.",
+                          systemImage: "bell.slash")
+                        .font(.caption)
+                        .foregroundStyle(UsageColor.critical)
+                    Button("Abrir Ajustes do Sistema") {
+                        guard let url = URL(string:
+                            "x-apple.systempreferences:com.apple.preference.notifications")
+                        else { return }
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+
             Section("Teto do bloco de 5h") {
                 Picker("", selection: $form.useManualCeiling) {
                     Text("Calibrar pelo histórico").tag(false)
@@ -87,6 +122,7 @@ struct SettingsView: View {
         .onAppear {
             loginItem.refresh()
             form.load(from: settings)
+            Task { await alerts.refreshAuthorization() }
         }
         .onChange(of: form.useManualCeiling) { _, _ in form.commit(to: settings) }
     }
