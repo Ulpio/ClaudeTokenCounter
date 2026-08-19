@@ -51,8 +51,8 @@ struct ClaudeTokenCounterApp: App {
                 .onChange(of: Self.settings.liveUsageEnabled) { _, enabled in
                     Self.store.liveUsageEnabled = enabled
                 }
-                .onChange(of: Self.settings.alertsEnabled) { _, enabled in
-                    Self.alerts.alertsEnabledChanged(to: enabled)
+                .onChange(of: Self.settings.alerts) { _, preferences in
+                    Self.alerts.alertsEnabledChanged(to: preferences.anyEnabled)
                 }
         }
     }

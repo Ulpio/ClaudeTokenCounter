@@ -4,17 +4,18 @@ import Foundation
 ///
 /// Pura e determinística: mesma sequência de entradas, mesma saída. Não lê
 /// relógio, não fala com o sistema de notificação, e por isso o comportamento
-/// inteiro — inclusive rearme e anti-repetição — cabe em teste.
+/// inteiro — inclusive rearme, anti-repetição e mudança de configuração no meio
+/// de uma janela — cabe em teste.
 public struct AlertPolicy {
-    /// Fixos por decisão de projeto: menos botão, e configurável só quando
-    /// houver evidência de que alguém precisa de outro valor.
-    public static let thresholds = [80, 95]
-
-    /// O que já foi disparado numa instância de janela. A instância é
-    /// identificada pelo `resetsAt`: mudou, é outra janela.
+    /// O que já aconteceu numa instância de janela. A instância é identificada
+    /// pelo `resetsAt`: mudou, é outra janela.
     private struct WindowState {
         let resetsAt: Date
         var firedThresholds: Set<Int>
+        /// A fração da avaliação anterior. É o que separa "cruzou agora" de
+        /// "já estava acima" — distinção sem a qual ligar um alerta no meio de
+        /// uma janela despejaria os cruzamentos que ninguém observou.
+        var lastPercent: Double
     }
 
     private var states: [Alert.Window: WindowState] = [:]
@@ -27,22 +28,25 @@ public struct AlertPolicy {
     /// Primeira condição que casar vence, de cima para baixo — mesmo padrão do
     /// `UsageSourcePolicy`.
     public mutating func evaluate(_ snapshot: UsageSnapshot,
-                                  alertsEnabled: Bool,
+                                  preferences: AlertPreferences,
                                   liveEnabled: Bool) -> [Alert] {
-        guard alertsEnabled else { return [] }
+        guard preferences.anyEnabled else { return [] }
 
         // Sem busca ao vivo o app lê o cache do Claude Code, que já foi medido
         // 13h25 defasado. Alertar sobre aquilo erra nos dois sentidos, e o pior
-        // é o silêncio enquanto o usuário estoura. Então avisa uma vez que os
-        // alertas dependem do ao vivo, e não afirma mais nada.
+        // é o silêncio enquanto o usuário estoura.
         guard liveEnabled else {
             defer { liveRequiredEmitted = true }
             return liveRequiredEmitted ? [] : [.liveRequired]
         }
 
-        return Alert.Window.allCases.flatMap { window in
-            evaluate(window: window, gauge: gauge(for: window, in: snapshot))
-        }
+        return Alert.Window.allCases
+            .filter { preferences.windows.contains($0) }
+            .flatMap { window in
+                evaluate(window: window,
+                         gauge: gauge(for: window, in: snapshot),
+                         preferences: preferences)
+            }
     }
 
     private func gauge(for window: Alert.Window,
@@ -54,7 +58,8 @@ public struct AlertPolicy {
     }
 
     private mutating func evaluate(window: Alert.Window,
-                                   gauge: UsageSnapshot.Gauge?) -> [Alert] {
+                                   gauge: UsageSnapshot.Gauge?,
+                                   preferences: AlertPreferences) -> [Alert] {
         // A procedência é verificada **no medidor**, não no status do snapshot:
         // um snapshot `.live` pode conter medidor derivado, quando o payload
         // veio sem a janela de 5h. Checar o status deixaria passar alerta sobre
@@ -64,40 +69,52 @@ public struct AlertPolicy {
         }
 
         let percent = gauge.fraction * 100
-        guard let state = states[window], state.resetsAt == resetsAt else {
-            return openWindow(window, resetsAt: resetsAt, at: percent)
+        guard var state = states[window], state.resetsAt == resetsAt else {
+            return openWindow(window, resetsAt: resetsAt, at: percent,
+                              preferences: preferences)
         }
 
-        // Só o limiar mais alto entre os recém-cruzados vira alerta; os menores
-        // são marcados como resolvidos. Dois banners pelo mesmo salto é
-        // exatamente a sensação de spam que esta feature evita.
-        let crossed = Self.thresholds.filter { !state.firedThresholds.contains($0)
-                                               && percent >= Double($0) }
-        guard let highest = crossed.max() else { return [] }
+        // Cruzou agora é passar de baixo para cima entre duas avaliações. Estar
+        // acima sem ter cruzado — porque o alerta acabou de ser ligado, ou o
+        // limiar acabou de ser acrescentado — é registrado como resolvido e
+        // segue calado: o app não viu aquilo acontecer.
+        let eligible = preferences.thresholds.filter { !state.firedThresholds.contains($0)
+                                                       && percent >= Double($0) }
+        let crossedNow = eligible.filter { state.lastPercent < Double($0) }
 
-        states[window]?.firedThresholds.formUnion(crossed)
+        state.firedThresholds.formUnion(eligible)
+        state.lastPercent = percent
+        states[window] = state
+
+        // Só o mais alto vira alerta: dois banners pelo mesmo salto é a
+        // sensação de spam que esta feature existe para não produzir, e o menor
+        // já nasceria como notícia velha.
+        guard preferences.thresholdsEnabled, let highest = crossedNow.max() else { return [] }
         return [.threshold(window: window, percent: highest, resetsAt: resetsAt)]
     }
 
     /// Abre uma instância de janela, estabelecendo a linha de base.
     ///
-    /// Nada dispara aqui: o app não observou o consumo chegar até onde está —
-    /// ele começou a olhar agora. Marcar os limiares já ultrapassados como
-    /// disparados é o que impede um alerta de afirmar cruzamento que ninguém viu.
+    /// Nenhum limiar dispara aqui: o app não observou o consumo chegar até onde
+    /// está — ele começou a olhar agora.
     ///
     /// É também o que dispensa persistir estado: reiniciando no meio de uma
     /// janela, esta linha reconstrói o estado correto a partir do próprio dado.
     private mutating func openWindow(_ window: Alert.Window,
                                      resetsAt: Date,
-                                     at percent: Double) -> [Alert] {
-        let closing = states[window]
+                                     at percent: Double,
+                                     preferences: AlertPreferences) -> [Alert] {
+        let hadPreviousWindow = states[window] != nil
         states[window] = WindowState(
             resetsAt: resetsAt,
-            firedThresholds: Set(Self.thresholds.filter { percent >= Double($0) }))
+            firedThresholds: Set(preferences.thresholds.filter { percent >= Double($0) }),
+            lastPercent: percent)
 
-        // A janela anterior só merece aviso de reset se o usuário tinha
-        // encostado no teto nela. São quatro ou cinco resets por dia.
-        guard let closing, !closing.firedThresholds.isEmpty else { return [] }
+        // Saber que a capacidade voltou vale por si — é quando dá para retomar
+        // trabalho pesado. Naturalmente contido: parando de usar o Claude Code,
+        // o medidor cai para derivado e a checagem de procedência acima já
+        // barra, então o aviso acontece em dia de trabalho.
+        guard preferences.resetEnabled, hadPreviousWindow else { return [] }
         return [.windowReset(window: window)]
     }
 }

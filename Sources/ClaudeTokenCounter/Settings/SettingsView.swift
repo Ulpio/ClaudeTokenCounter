@@ -52,7 +52,7 @@ struct SettingsView: View {
             }
 
             Section("Alertas") {
-                Toggle("Avisar ao aproximar do teto", isOn: $settings.alertsEnabled)
+                Toggle("Avisar ao aproximar do teto", isOn: $settings.alerts.thresholdsEnabled)
                 Text("Notifica ao passar de 80% e de 95% da janela de 5h e da semanal, "
                      + "e avisa quando a janela reseta — só se você tiver encostado no teto.")
                     .font(.caption)
@@ -61,7 +61,7 @@ struct SettingsView: View {
                 // Alerta sobre cache defasada erraria nos dois sentidos, e o
                 // pior deles é o silêncio enquanto o usuário estoura. Então em
                 // vez de notificar mal, a tela oferece a saída.
-                if settings.alertsEnabled && !settings.liveUsageEnabled {
+                if settings.alerts.anyEnabled && !settings.liveUsageEnabled {
                     Label("Alertas precisam da busca ao vivo — sem ela o número pode "
                           + "estar horas atrasado.", systemImage: "exclamationmark.triangle")
                         .font(.caption)
@@ -70,7 +70,7 @@ struct SettingsView: View {
                 }
 
                 // Uma chave ligada sobre permissão negada é uma chave que mente.
-                if settings.alertsEnabled && alerts.isDenied {
+                if settings.alerts.anyEnabled && alerts.isDenied {
                     Label("Notificações negadas nos Ajustes do Sistema.",
                           systemImage: "bell.slash")
                         .font(.caption)

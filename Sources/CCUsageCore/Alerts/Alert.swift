@@ -14,7 +14,7 @@ public enum Alert: Equatable, Sendable {
     /// Alertas ligados sem busca ao vivo: nada pode ser afirmado com confiança.
     case liveRequired
 
-    public enum Window: Equatable, Sendable, CaseIterable {
+    public enum Window: String, Codable, Equatable, Sendable, CaseIterable {
         case session
         case weekly
     }

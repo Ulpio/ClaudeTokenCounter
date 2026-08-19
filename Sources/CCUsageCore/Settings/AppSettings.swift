@@ -66,12 +66,11 @@ public final class AppSettings {
         didSet { save() }
     }
 
-    /// Liga as notificações de consumo.
-    ///
-    /// Desligado por padrão: notificação é interrupção, e interrupção não pode
-    /// ser o estado inicial de nada. Ligar dispara o pedido de permissão do
-    /// sistema — que é o momento certo para pedir, porque aí há contexto.
-    public var alertsEnabled: Bool {
+    /// O que notificar. Tudo desligado por padrão: notificação é interrupção, e
+    /// interrupção não pode ser o estado inicial de nada. Ligar dispara o
+    /// pedido de permissão do sistema — que é o momento certo para pedir,
+    /// porque aí existe contexto.
+    public var alerts: AlertPreferences {
         didSet { save() }
     }
 
@@ -94,7 +93,10 @@ public final class AppSettings {
         self.plan = stored?.plan ?? detected ?? .max20
         self.manualBlockCeiling = stored?.manualBlockCeiling
         self.liveUsageEnabled = stored?.liveUsageEnabled ?? false
-        self.alertsEnabled = stored?.alertsEnabled ?? false
+        // `alertsEnabled` é o formato anterior, de quando havia uma chave só.
+        // Migra em vez de descartar: quem tinha ligado não perde a escolha.
+        self.alerts = stored?.alerts
+            ?? ((stored?.alertsEnabled ?? false) ? .default : .off)
     }
 
     /// `true` quando a detecção discorda do que está selecionado — a UI avisa
@@ -114,14 +116,16 @@ public final class AppSettings {
         /// Ausente em payload gravado antes deste campo existir. `nil` resolve
         /// para `false` no init — nunca para ligado.
         var liveUsageEnabled: Bool?
-        /// Idem: ausente em payload gravado antes deste campo existir.
+        /// Formato anterior, com uma chave só. Lido para migração; não é mais
+        /// gravado.
         var alertsEnabled: Bool?
+        var alerts: AlertPreferences?
     }
 
     private func save() {
         let payload = Payload(plan: plan, manualBlockCeiling: manualBlockCeiling,
                               liveUsageEnabled: liveUsageEnabled,
-                              alertsEnabled: alertsEnabled)
+                              alertsEnabled: nil, alerts: alerts)
         guard let data = try? JSONEncoder().encode(payload) else { return }
         defaults.set(data, forKey: Self.storageKey)
     }

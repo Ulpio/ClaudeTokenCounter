@@ -1,7 +1,10 @@
 # Alertas de consumo — Design
 
 **Data:** 2026-08-19
-**Status:** Aprovado para planejamento
+**Status:** Implementado
+**Revisão:** 2026-08-19 — reset deixou de ser condicional e os limiares viraram
+configuráveis, a pedido do usuário. Decisões 4 e 6 abaixo revistas; §5.4
+reescrita.
 **Contexto:** primeiro item do nível 1 do diagnóstico de produto (o app não avisa)
 
 ---
@@ -57,9 +60,10 @@ sobre número estimado sob a etiqueta de ao vivo.
 | 1 | Alerta só com `provenance == .live` | §2 |
 | 2 | Uma notificação única explicando, se o usuário liga alertas com o ao vivo desligado | Silêncio é indistinguível de bug; e vira a cura da descoberta do ao vivo |
 | 3 | Gatilho é cruzar porcentagem, não projeção por ritmo | Projeção é previsão; o app afirma o que observou. Ritmo oscila e a rajada curta gera alarme que se desmente sozinho |
-| 4 | Limiares fixos em 80% e 95% | Menos botão. Configurável quando houver evidência de que precisa |
+| 4 | ~~Limiares fixos~~ → **configuráveis** entre 80, 90 e 95; padrão 80 e 95 | A evidência apareceu: o usuário pediu. Chips na tela, não campo livre |
 | 5 | Janelas de 5h e semanal; **não** as por modelo | Multiplicariam o ruído sem demanda conhecida |
 | 6 | Sem persistência de estado | §5.2 a torna desnecessária |
+| 7 | Reset avisa sempre, com chave própria | Revisão de 2026-08-19; ver §5.4 |
 
 ---
 
@@ -95,7 +99,7 @@ public struct AlertPolicy {
     /// Consome um snapshot e devolve o que emitir. Guarda dentro de si o que já
     /// disparou, por instância de janela.
     public mutating func evaluate(_ snapshot: UsageSnapshot,
-                                  alertsEnabled: Bool,
+                                  preferences: AlertPreferences,
                                   liveEnabled: Bool) -> [Alert]
 }
 ```
@@ -162,6 +166,16 @@ O limiar é comparado contra `Gauge.fraction`, que é saturada em 1, e **não**
 contra `rawFraction`. Abaixo de 100% as duas são idênticas; a escolha importa
 para o alerta concordar com o número que o painel mostra na mesma hora.
 
+### 5.2.1 Mudar a configuração no meio de uma janela
+
+A mesma regra da linha de base vale para ligar um alerta, ou acrescentar um
+limiar, com a janela já em curso: nada do que já passou dispara.
+
+Isso exige distinguir "cruzou agora" de "já estava acima", o que o conjunto de
+limiares disparados sozinho não resolve. Daí o `lastPercent` guardado no estado
+da janela: cruzamento é `lastPercent < limiar <= atual`. Um limiar elegível que
+não cruzou agora é registrado como resolvido e segue calado.
+
 ### 5.3 Fração que cai
 
 Dentro de uma janela a fração só cresce até resetar — mas ela **pode cair** na
@@ -172,11 +186,20 @@ não redispara. A regra existe por causa de um caso medido, não hipotético.
 
 ### 5.4 Reset
 
-Avisar todo reset da janela de 5h seriam quatro ou cinco notificações por dia.
+**Regra:** o reset avisa sempre que uma instância de janela é substituída por
+outra, independentemente de ter encostado no teto. Saber que a capacidade voltou
+vale por si — é quando dá para retomar trabalho pesado.
 
-**Regra:** o reset só avisa se aquela instância de janela tinha disparado algum
-limiar. Você só ouve "sua janela resetou" se tinha encostado no teto. Quem nunca
-chegou perto não recebe nada.
+A versão anterior desta spec condicionava o aviso a ter disparado algum limiar,
+por medo de spam. Duas coisas derrubaram a condição. A primeira é que o usuário
+quer o aviso incondicional, e é a chamada dele. A segunda apareceu ao
+implementar: **o aviso já é naturalmente contido**. Parando de usar o Claude
+Code, a janela não é substituída por outra ativa — o medidor cai para derivado, e
+a checagem de procedência da §2 barra antes. O reset só é notificado em dia de
+trabalho.
+
+Quem ainda achar demais desliga pela chave própria, sem perder os alertas de
+limiar.
 
 ### 5.5 Ordem de avaliação
 
@@ -251,6 +274,14 @@ Todos sobre `AlertPolicy`, sem sistema de notificação:
 | 10 | Reset não avisa se a janela nunca disparou |
 | 11 | `liveRequired` sai uma vez por execução, não a cada snapshot |
 | 12 | Alertas desligados: nenhuma saída em nenhum cenário acima |
+| 13 | Reset avisa mesmo sem nenhum limiar ter disparado (§5.4) |
+| 14 | Reset cala com a chave de reset desligada |
+| 15 | Reset avisa mesmo com os alertas de limiar desligados |
+| 16 | Janela fora da configuração nunca alerta |
+| 17 | Limiar fora da configuração nunca dispara |
+| 18 | Ligar os limiares no meio da janela não despeja o que já passou (§5.2.1) |
+| 19 | Acrescentar limiar já ultrapassado não dispara (§5.2.1) |
+| 20 | Com tudo desligado, nem o aviso de ao vivo sai |
 
 ---
 
@@ -260,6 +291,7 @@ Todos sobre `AlertPolicy`, sem sistema de notificação:
 |---|---|
 | cria | `Sources/CCUsageCore/Alerts/Alert.swift` |
 | cria | `Sources/CCUsageCore/Alerts/AlertPolicy.swift` |
+| cria | `Sources/CCUsageCore/Alerts/AlertPreferences.swift` |
 | cria | `Sources/ClaudeTokenCounter/Alerts/UserNotificationPresenter.swift` |
 | cria | `Sources/ClaudeTokenCounter/Alerts/AlertCoordinator.swift` |
 | cria | `Tests/CCUsageCoreTests/AlertPolicyTests.swift` |
@@ -297,7 +329,6 @@ acima de tudo, idempotente entre snapshots iguais. Os testes 3 e 11 cobrem isso.
 ## 11. Não-objetivos
 
 - Projeção por ritmo (§3, decisão 3)
-- Limiares configuráveis (§3, decisão 4)
 - Janelas por modelo (§3, decisão 5)
 - Som, badge, ou notificação persistente
 - Histórico de alertas no painel

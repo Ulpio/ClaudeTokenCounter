@@ -26,7 +26,7 @@ final class AlertCoordinator {
 
     func handle(_ snapshot: UsageSnapshot) {
         for alert in policy.evaluate(snapshot,
-                                     alertsEnabled: settings.alertsEnabled,
+                                     preferences: settings.alerts,
                                      liveEnabled: settings.liveUsageEnabled) {
             presenter.present(alert)
         }

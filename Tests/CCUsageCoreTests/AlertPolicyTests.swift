@@ -22,10 +22,11 @@ private func snapshot(_ session: UsageSnapshot.Gauge,
                   calibratedBlockCeiling: 1, sourceStatus: .live(at: noon))
 }
 
-/// Atalho: alertas ligados, ao vivo ligado — o cenário em que a política de fato
+/// Atalho: tudo ligado, ao vivo ligado — o cenário em que a política de fato
 /// trabalha. Os casos de desligado são explícitos nos testes que os exercitam.
-private func evaluate(_ policy: inout AlertPolicy, _ s: UsageSnapshot) -> [Alert] {
-    policy.evaluate(s, alertsEnabled: true, liveEnabled: true)
+private func evaluate(_ policy: inout AlertPolicy, _ s: UsageSnapshot,
+                      _ preferences: AlertPreferences = .default) -> [Alert] {
+    policy.evaluate(s, preferences: preferences, liveEnabled: true)
 }
 
 // MARK: - Linha de base
@@ -103,12 +104,74 @@ private func evaluate(_ policy: inout AlertPolicy, _ s: UsageSnapshot) -> [Alert
     #expect(alerts == [.windowReset(window: .session)])
 }
 
-/// Quatro ou cinco resets por dia; avisar todos seria spam. Só quem encostou no
-/// teto tem interesse em saber que a capacidade voltou.
-@Test func resetIsSilentWhenTheWindowNeverFired() {
+/// Saber que a capacidade voltou vale por si, mesmo para quem não chegou perto
+/// do teto — é quando dá para retomar trabalho pesado. Quem achar demais desliga
+/// pela chave própria, exercitada no teste seguinte.
+@Test func resetAlertsEvenWhenNoThresholdEverFired() {
     var policy = AlertPolicy()
     _ = evaluate(&policy, snapshot(gauge(10, resetsAt: resetA)))
-    #expect(evaluate(&policy, snapshot(gauge(1, resetsAt: resetB))).isEmpty)
+    #expect(evaluate(&policy, snapshot(gauge(1, resetsAt: resetB)))
+            == [.windowReset(window: .session)])
+}
+
+@Test func resetIsSilentWhenResetAlertsAreOff() {
+    var preferences = AlertPreferences.default
+    preferences.resetEnabled = false
+    var policy = AlertPolicy()
+    _ = evaluate(&policy, snapshot(gauge(10, resetsAt: resetA)), preferences)
+    #expect(evaluate(&policy, snapshot(gauge(1, resetsAt: resetB)), preferences).isEmpty)
+}
+
+@Test func resetsStillAlertWhileThresholdAlertsAreOff() {
+    var preferences = AlertPreferences.default
+    preferences.thresholdsEnabled = false
+    var policy = AlertPolicy()
+    _ = evaluate(&policy, snapshot(gauge(90, resetsAt: resetA)), preferences)
+    #expect(evaluate(&policy, snapshot(gauge(1, resetsAt: resetB)), preferences)
+            == [.windowReset(window: .session)])
+}
+
+// MARK: - Configuração
+
+@Test func aWindowOutsideThePreferencesNeverAlerts() {
+    var preferences = AlertPreferences.default
+    preferences.windows = [.weekly]
+    var policy = AlertPolicy()
+    _ = evaluate(&policy, snapshot(gauge(70, resetsAt: resetA)), preferences)
+    #expect(evaluate(&policy, snapshot(gauge(85, resetsAt: resetA)), preferences).isEmpty)
+}
+
+@Test func aThresholdOutsideThePreferencesNeverFires() {
+    var preferences = AlertPreferences.default
+    preferences.thresholds = [95]
+    var policy = AlertPolicy()
+    _ = evaluate(&policy, snapshot(gauge(70, resetsAt: resetA)), preferences)
+    #expect(evaluate(&policy, snapshot(gauge(85, resetsAt: resetA)), preferences).isEmpty)
+}
+
+/// Ligar os alertas no meio de uma janela não pode despejar o que já passou: o
+/// app não observou aqueles cruzamentos, chegou depois deles. Mesma regra da
+/// linha de base, aplicada a mudança de configuração em vez de a lançamento.
+@Test func enablingThresholdsMidWindowDoesNotFireWhatWasAlreadyPassed() {
+    var off = AlertPreferences.default
+    off.thresholdsEnabled = false
+    var policy = AlertPolicy()
+    _ = evaluate(&policy, snapshot(gauge(50, resetsAt: resetA)), off)
+    _ = evaluate(&policy, snapshot(gauge(85, resetsAt: resetA)), off)
+    #expect(evaluate(&policy, snapshot(gauge(86, resetsAt: resetA)), .default).isEmpty)
+}
+
+/// Idem para acrescentar um limiar já ultrapassado.
+@Test func addingAThresholdMidWindowDoesNotFireWhatWasAlreadyPassed() {
+    var narrow = AlertPreferences.default
+    narrow.thresholds = [95]
+    var wide = AlertPreferences.default
+    wide.thresholds = [80, 90, 95]
+
+    var policy = AlertPolicy()
+    _ = evaluate(&policy, snapshot(gauge(50, resetsAt: resetA)), narrow)
+    _ = evaluate(&policy, snapshot(gauge(92, resetsAt: resetA)), narrow)
+    #expect(evaluate(&policy, snapshot(gauge(93, resetsAt: resetA)), wide).isEmpty)
 }
 
 // MARK: - Chaves
@@ -116,22 +179,30 @@ private func evaluate(_ policy: inout AlertPolicy, _ s: UsageSnapshot) -> [Alert
 @Test func liveRequiredIsEmittedOncePerRun() {
     var policy = AlertPolicy()
     let first = policy.evaluate(snapshot(gauge(50, resetsAt: resetA)),
-                                alertsEnabled: true, liveEnabled: false)
+                                preferences: .default, liveEnabled: false)
     let second = policy.evaluate(snapshot(gauge(60, resetsAt: resetA)),
-                                 alertsEnabled: true, liveEnabled: false)
+                                 preferences: .default, liveEnabled: false)
     #expect(first == [.liveRequired])
     #expect(second.isEmpty)
 }
 
-@Test func nothingIsEmittedWhileAlertsAreOff() {
+@Test func nothingIsEmittedWhileEveryAlertIsOff() {
     var policy = AlertPolicy()
-    _ = policy.evaluate(snapshot(gauge(70, resetsAt: resetA)), alertsEnabled: false, liveEnabled: true)
+    _ = policy.evaluate(snapshot(gauge(70, resetsAt: resetA)), preferences: .off, liveEnabled: true)
     let crossing = policy.evaluate(snapshot(gauge(96, resetsAt: resetA)),
-                                   alertsEnabled: false, liveEnabled: true)
+                                   preferences: .off, liveEnabled: true)
     let reset = policy.evaluate(snapshot(gauge(1, resetsAt: resetB)),
-                                alertsEnabled: false, liveEnabled: true)
+                                preferences: .off, liveEnabled: true)
     #expect(crossing.isEmpty)
     #expect(reset.isEmpty)
+}
+
+/// Com tudo desligado não há o que a busca ao vivo habilitasse, então nem o
+/// aviso sobre ela faz sentido.
+@Test func liveRequiredIsSilentWhenEveryAlertIsOff() {
+    var policy = AlertPolicy()
+    #expect(policy.evaluate(snapshot(gauge(50, resetsAt: resetA)),
+                            preferences: .off, liveEnabled: false).isEmpty)
 }
 
 // MARK: - Semanal
