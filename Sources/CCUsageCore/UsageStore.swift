@@ -37,6 +37,10 @@ public final class UsageStore {
     public var liveUsageEnabled: Bool {
         didSet {
             guard liveUsageEnabled != oldValue else { return }
+            // Religar é a retentativa deliberada do usuário. Sem isto, uma
+            // leitura negada ficaria em cache até o app ser reaberto — e a
+            // única saída seria fechar o app, que ninguém adivinha.
+            if liveUsageEnabled { Self.liveCredentials.invalidate() }
             lastLive = nil
             rebuild()
             if liveUsageEnabled { Task { await refreshLive() } }
@@ -61,9 +65,22 @@ public final class UsageStore {
 
     /// O `KeychainCredentialSource` que lê o token é construído **aqui e só
     /// aqui**, dentro de um caminho que nunca roda com o toggle desligado.
+    ///
+    /// Vive uma vez, e não por busca: o item pertence ao Claude Code, então cada
+    /// leitura pode abrir o diálogo de autorização do macOS. Construir a fonte
+    /// dentro do `fetchLive` relia a cada 5 minutos, e quem tivesse clicado
+    /// "Permitir" em vez de "Sempre Permitir" recebia um pedido de senha nessa
+    /// cadência.
+    ///
+    /// O `PlanDetector` continua com a leitura dele, separada: aquele caminho
+    /// passa `readsAccessToken: false`, e compartilhar esta fonte extrairia o
+    /// token mesmo com a busca ao vivo desligada — exatamente o que a promessa
+    /// de privacidade do app diz que não acontece.
+    public static let liveCredentials = CachedCredentialSource(
+        wrapping: KeychainCredentialSource(readsAccessToken: true))
+
     public static let defaultLiveFetch: LiveFetch = { now in
-        try await LiveUsageFetcher(
-            source: KeychainCredentialSource(readsAccessToken: true)).fetch(at: now)
+        try await LiveUsageFetcher(source: liveCredentials).fetch(at: now)
     }
 
     public init(
@@ -137,6 +154,10 @@ public final class UsageStore {
         do {
             lastLive = .success(try await fetchLive(now))
         } catch let error as LiveUsageError {
+            // 401 diz que o token em cache não serve, mesmo com o `expiresAt`
+            // ainda no futuro — o Claude Code pode tê-lo rotacionado. Descartar
+            // aqui é o que permite a próxima busca ler o token novo.
+            if error == .unauthorized { Self.liveCredentials.invalidate() }
             lastLive = .failure(error)
         } catch {
             lastLive = .failure(.transport)
