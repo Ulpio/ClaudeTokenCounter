@@ -9,7 +9,7 @@ consumido — e, principalmente, **de onde esse número veio**.
 ◐ 81%   ← quanto da janela de 5h já foi gasto, ao vivo
 ```
 
-<img src="docs/art/panel.png" alt="Painel do app: sessão de 5h e janela semanal com horário de reset, e o valor equivalente em API de hoje, da semana e do mês" width="420">
+<img src="docs/art/panel.png" alt="O app na barra de menu mostrando o anel de consumo e 35%, com o painel aberto abaixo: sessão de 5h e janela semanal com horário de reset, e o valor equivalente em API de hoje, da semana e do mês" width="420">
 
 ## Por que ele existe
 
