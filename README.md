@@ -130,7 +130,7 @@ itself makes.
 ## Development
 
 ```bash
-./Scripts/test.sh          # core suite (178 tests) + string catalog check
+./Scripts/test.sh          # core suite (183 tests) + string catalog check
 ./Scripts/check-strings.sh # keys vs. catalogs, and loose literals in views
 ./Scripts/icon.sh          # draws the .icns, installer art, banner and social
                            # card; given a capture path, frames the screenshot
@@ -179,7 +179,16 @@ The mark is a ring that fills as the 5-hour window advances, and it exists once:
 live fraction, and `Scripts/icon.swift` — compiled against that same file —
 freezes it at 62% for the app icon.
 
-Design decisions live in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+## Contributing
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers
+building without Xcode, why `swift test` doesn't work in this toolchain, the
+string-catalog check that will fail your PR, and the privacy invariants a change
+near the Keychain has to preserve.
+
+Bug reports: please include the provenance line the panel shows. A wrong
+percentage means something very different depending on whether it came from
+`live` or a stale cache, and it's the first thing anyone debugging will ask for.
 
 ## Credits
 

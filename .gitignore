@@ -12,3 +12,6 @@ dist/
 
 # Workspace de execução do superpowers (scratch, não versionado)
 .superpowers/
+
+# Specs e planos de design (locais, nao versionados)
+docs/superpowers/
