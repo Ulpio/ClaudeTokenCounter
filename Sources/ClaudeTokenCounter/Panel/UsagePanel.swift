@@ -5,6 +5,10 @@ import CCUsageCore
 struct UsagePanel: View {
     let snapshot: UsageSnapshot
     let plan: Plan
+    /// `true` quando a busca ao vivo está desligada — o único estado em que
+    /// ligar é uma ação disponível.
+    let canEnableLive: Bool
+    let onEnableLive: () -> Void
 
     var body: some View {
         GlassEffectContainer {
@@ -61,11 +65,32 @@ struct UsagePanel: View {
     /// podia estar treze horas atrasado.
     private var provenanceRow: some View {
         let (text, icon, isWarning) = provenance
-        return Label(text, systemImage: icon)
-            .font(.caption2)
-            .foregroundStyle(isWarning
-                             ? AnyShapeStyle(UsageColor.warning)
-                             : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
+        return HStack(spacing: 6) {
+            Label(text, systemImage: icon)
+                .font(.caption2)
+                .foregroundStyle(isWarning
+                                 ? AnyShapeStyle(UsageColor.warning)
+                                 : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
+            if offersLiveUsage {
+                Button("Ligar ao vivo", action: onEnableLive)
+                    .buttonStyle(.link)
+                    .font(.caption2)
+            }
+        }
+    }
+
+    /// A linha diz há muito tempo o que está errado; até aqui ela não fazia nada
+    /// a respeito. O botão aparece só onde o problema é remediável por clique.
+    ///
+    /// Credencial expirada não entra: a saída é rodar o Claude Code. Sem conexão
+    /// também não: a saída é esperar. Oferecer um botão nesses estados seria
+    /// prometer conserto que ele não faz.
+    private var offersLiveUsage: Bool {
+        guard canEnableLive else { return false }
+        switch snapshot.sourceStatus {
+        case .cached, .derivedOnly: return true
+        case .live, .credentialExpired, .liveUnavailable: return false
+        }
     }
 
     private var provenance: (String, String, Bool) {

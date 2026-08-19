@@ -28,9 +28,23 @@ struct ClaudeTokenCounterApp: App {
         Self.store.start()
     }
 
+    /// Liga a preferência ao store num lugar só.
+    ///
+    /// O `onChange` abaixo vive na cena de Ajustes, e cena só existe com a
+    /// janela aberta: ligar o ao vivo pelo painel, sem nunca ter aberto os
+    /// Ajustes, gravaria a preferência e deixaria o store sem saber. O número
+    /// continuaria vindo do cache com a tela dizendo que está ao vivo.
+    @MainActor private static func setLiveUsage(_ enabled: Bool) {
+        settings.liveUsageEnabled = enabled
+        store.liveUsageEnabled = enabled
+    }
+
     var body: some Scene {
         MenuBarExtra {
-            UsagePanel(snapshot: Self.store.snapshot, plan: Self.settings.plan)
+            UsagePanel(snapshot: Self.store.snapshot,
+                       plan: Self.settings.plan,
+                       canEnableLive: !Self.settings.liveUsageEnabled,
+                       onEnableLive: { Self.setLiveUsage(true) })
                 .onAppear { Self.store.panelDidOpen() }
         } label: {
             MenuBarLabel(snapshot: Self.store.snapshot)
@@ -49,7 +63,7 @@ struct ClaudeTokenCounterApp: App {
                     Self.store.ceilingOverride = override
                 }
                 .onChange(of: Self.settings.liveUsageEnabled) { _, enabled in
-                    Self.store.liveUsageEnabled = enabled
+                    Self.setLiveUsage(enabled)
                 }
                 .onChange(of: Self.settings.alerts) { _, preferences in
                     Self.alerts.alertsEnabledChanged(to: preferences.anyEnabled)
