@@ -18,7 +18,15 @@ DIST="$ROOT/dist"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 TAG="v$VERSION"
 DRY_RUN=false
-[ "${1:-}" = "--dry-run" ] && DRY_RUN=true
+TITLE="$TAG"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dry-run) DRY_RUN=true ;;
+        --title) TITLE="$2"; shift ;;
+        *) echo "erro: argumento desconhecido: $1" >&2; exit 1 ;;
+    esac
+    shift
+done
 
 echo "==> Release $TAG${DRY_RUN:+ (simulação)}"
 
@@ -70,14 +78,19 @@ if $DRY_RUN; then
 fi
 
 echo "==> Publicando"
-git -C "$ROOT" tag -a "$TAG" -m "$TAG"
+# O branch vai junto com a tag. Empurrar so a tag publica os artefatos mas deixa
+# a pagina do projeto na versao anterior — README, banner e docs/art nao
+# chegariam, e a tag apontaria para um commit que ninguem ve.
+BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
+git -C "$ROOT" push origin "$BRANCH"
+git -C "$ROOT" tag -a "$TAG" -m "$TITLE"
 git -C "$ROOT" push origin "$TAG"
 # `--generate-notes` em vez de `--notes-file -`: aquele lê da entrada padrão e
 # trava um script que ninguém está observando. As notas saem dos commits e podem
 # ser editadas no GitHub depois.
 gh release create "$TAG" "$DMG" "$ZIP" \
     --repo Ulpio/ClaudeTokenCounter \
-    --title "$TAG" \
+    --title "$TITLE" \
     --generate-notes
 
 echo "==> Done: https://github.com/Ulpio/ClaudeTokenCounter/releases/tag/$TAG"
