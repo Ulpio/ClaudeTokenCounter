@@ -246,11 +246,13 @@ func drawInstallerBackground(size: CGSize, scale: CGFloat, in context: CGContext
                                end: CGPoint(x: rect.midX, y: rect.height),
                                options: [])
 
+    // Só o nome. A instrução de arrastar foi removida de propósito: o Finder já
+    // mostra o ícone, a seta e a pasta de destino **com o nome no idioma de
+    // quem abriu** — "Applications", "Aplicativos", "アプリケーション". A frase
+    // repetia em português o que a janela já diz na língua certa, e obrigaria a
+    // gerar uma arte por idioma para um DMG que é montado uma vez só.
     drawText("Claude Token Counter", font: .systemFont(ofSize: 22, weight: .semibold),
-             color: Palette.ink, centeredAt: CGPoint(x: rect.midX, y: 56), in: context)
-    drawText("Arraste para a pasta Aplicativos",
-             font: .systemFont(ofSize: 13, weight: .regular),
-             color: Palette.inkFaint, centeredAt: CGPoint(x: rect.midX, y: 84), in: context)
+             color: Palette.ink, centeredAt: CGPoint(x: rect.midX, y: 62), in: context)
 
     // Um halo suave atrás de onde o Finder vai pôr o app: sem ele, o olho não
     // tem por onde começar numa janela que é quase toda branca.
@@ -289,7 +291,9 @@ func drawInstallerBackground(size: CGSize, scale: CGFloat, in context: CGContext
     // Rodapé com os dois requisitos que fazem o app simplesmente não abrir. É a
     // informação mais útil que cabe aqui, e o instalador é o último momento em
     // que alguém a lê antes de concluir que o app está quebrado.
-    drawText("Requer macOS 26 ou mais recente  ·  Intel e Apple Silicon",
+    // O rodapé carrega informação real, e por isso fica — em inglês, porque o
+    // DMG é servido para todo mundo a partir de um arquivo só.
+    drawText("Requires macOS 26 or later  ·  Intel and Apple Silicon",
              font: .systemFont(ofSize: 11, weight: .regular),
              color: CGColor(gray: 0.58, alpha: 1),
              centeredAt: CGPoint(x: rect.midX, y: 352), in: context)
@@ -299,7 +303,9 @@ func drawInstallerBackground(size: CGSize, scale: CGFloat, in context: CGContext
 
 // MARK: - Banner e card social
 
-let tagline = "Quanto do seu plano já foi consumido — e de onde veio o número."
+/// Em inglês: banner e card social são a página do projeto, servida a partir de
+/// um arquivo só para quem chegar de qualquer lugar.
+let tagline = "How much of your plan you've used — and where that number came from."
 
 /// Fundo escuro da marca, com um anel enorme sangrando pela borda. O anel
 /// gigante é o mesmo `drawRing` — a marca aparece duas vezes, em escalas
@@ -343,7 +349,7 @@ func drawBanner(in context: CGContext, scale: CGFloat) {
              color: CGColor(gray: 1, alpha: 1), leftAt: CGPoint(x: 262, y: 140), in: context)
     drawText(tagline, font: .systemFont(ofSize: 21, weight: .regular),
              color: CGColor(gray: 1, alpha: 0.82), leftAt: CGPoint(x: 264, y: 202), in: context)
-    drawText("macOS 26+  ·  barra de menu  ·  MIT",
+    drawText("macOS 26+  ·  menu bar  ·  MIT",
              font: .systemFont(ofSize: 15, weight: .medium),
              color: CGColor(gray: 1, alpha: 0.5), leftAt: CGPoint(x: 264, y: 246), in: context)
 

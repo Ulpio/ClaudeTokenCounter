@@ -2,164 +2,190 @@
 
 # Claude Token Counter
 
-App de menu bar para macOS que mostra quanto do seu plano Claude Code já foi
-consumido — e, principalmente, **de onde esse número veio**.
+A macOS menu bar app that shows how much of your Claude Code plan you've used —
+and, more importantly, **where that number came from**.
 
 ```
-◐ 81%   ← quanto da janela de 5h já foi gasto, ao vivo
+◐ 81%   ← how much of the 5-hour window is spent, live
 ```
 
-<img src="docs/art/panel.png" alt="O app na barra de menu mostrando o anel de consumo e 35%, com o painel aberto abaixo: sessão de 5h e janela semanal com horário de reset, e o valor equivalente em API de hoje, da semana e do mês" width="420">
+<img src="docs/art/panel.png" alt="The app in the menu bar showing the usage ring at 35%, with the panel open below: the 5-hour session and weekly window with reset times, and the API-equivalent value for today, this week and this month" width="420">
 
-## Por que ele existe
+## Why it exists
 
-O Claude Code guarda em `~/.claude.json` um cache com o seu consumo. Esse cache
-**só se atualiza quando o Claude Code roda**.
+Claude Code keeps a cache of your usage in `~/.claude.json`. That cache **only
+updates while Claude Code is running**.
 
-Numa medição real feita durante o desenvolvimento, o cache estava **18 horas
-atrasado**: dizia 35% de uso na janela de 5 horas quando o valor verdadeiro era
-**81%**. Um app que lesse só o cache diria que você tem folga de sobra
-justamente quando você está prestes a bater o teto.
+In a real measurement taken during development, the cache was **18 hours
+stale**: it reported 35% of the 5-hour window used when the true figure was
+**81%**. An app reading only that cache would tell you there's plenty of room
+left at exactly the moment you're about to hit the ceiling.
 
-Este app busca os números ao vivo, e quando não consegue, **diz que não
-conseguiu** em vez de mostrar um valor velho com cara de fresco.
+This app fetches the numbers live, and when it can't, it **says so** instead of
+showing an old value with a fresh face.
 
-## Três fontes, e a tela sempre diz qual está em uso
+## Three sources, and the screen always says which one is in use
 
-| Fonte | Quando | O que a tela mostra |
+| Source | When | What the screen shows |
 |---|---|---|
-| **Ao vivo** | Toggle ligado, credencial válida | `ao vivo` |
-| **Cache do Claude Code** | Toggle desligado, ou busca falhou | `cache do Claude Code · há 20m`, ou **`cache defasada · há 18h`** em amarelo quando passa de 1h |
-| **Derivado do histórico** | Sem cache — instalação nova | `estimado do seu histórico` |
+| **Live** | Toggle on, valid credential | `live` |
+| **Claude Code cache** | Toggle off, or the fetch failed | `Claude Code cache · 20m ago`, or **`stale cache · 18h old`** in amber past one hour |
+| **Derived from history** | No cache — fresh install | `estimated from your history` |
 
-Um número sem procedência é um número em que não dá para confiar. Cada estado
-de falha tem frase própria, porque a saída é diferente: credencial expirada
-pede que você rode o Claude Code; falha de rede pede que você espere.
+A number without provenance is a number you can't trust. Each failure state gets
+its own sentence, because the way out differs: an expired credential asks you to
+run Claude Code; a network failure asks you to wait.
 
-## O que ele mostra
+## What it shows
 
-- **Sessão (5h) e semanal**, com horário de reset e contagem regressiva
-- **Janelas semanais por modelo**, quando a sua conta tem alguma com uso
-- **Valor equivalente em API** — tokens e US$ de hoje, da semana e do mês,
-  com preço por modelo *e por data*; modelo sem preço conhecido nunca vira
-  US$ 0,00, o total é marcado como parcial
-- **Múltiplo de retorno** do plano: quanto o consumo do mês cobre a mensalidade
+- **Session (5h) and weekly**, with reset times and countdowns
+- **Per-model weekly windows**, when your account has any with usage
+- **API-equivalent value** — tokens and USD for today, this week and this month,
+  priced per model *and per date*; a model with no known price never becomes
+  $0.00, the total is marked partial instead
+- **Plan return multiple**: how far the month's usage covers the subscription
 
-## Instalação
+## Alerts
+
+The app can notify you before you hit the ceiling, and when a window resets and
+capacity comes back. Off by default — a notification is an interruption, and an
+interruption shouldn't be anything's initial state.
+
+Thresholds (80/90/95) and windows are configurable in Settings.
+
+**Alerts only fire on live data.** Built on the cache, an alert would be wrong in
+both directions — and the worse direction is silence while you blow past the
+ceiling. Turn alerts on without live fetching and the app tells you once, with a
+button to fix it, rather than notifying you badly.
+
+## Install
 
 ### DMG
 
-Baixe o `.dmg` da [última release](../../releases/latest), abra, e arraste o app
-para a pasta `Applications` que aparece na janela.
+Download the `.dmg` from the [latest release](../../releases/latest), open it,
+and drag the app onto the `Applications` folder in the window.
 
-O app é assinado ad-hoc, não notarizado pela Apple. Na primeira abertura o
-macOS vai bloqueá-lo — o DMG deixa a instalação familiar, mas não muda isso.
-Duas formas de liberar:
+The app is ad-hoc signed, not notarized by Apple. macOS will block it on first
+launch — the DMG makes installation familiar, but it doesn't change that. Two
+ways through:
 
 ```bash
 xattr -d com.apple.quarantine /Applications/ClaudeTokenCounter.app
 ```
 
-Ou, sem terminal: tente abrir, deixe o macOS bloquear, e vá em **Ajustes do
-Sistema → Privacidade e Segurança**; role até o aviso e clique em **Abrir Assim
-Mesmo**.
+Or, without the terminal: try to open it, let macOS block it, then go to **System
+Settings → Privacy & Security**, scroll to the notice, and click **Open Anyway**.
 
-O truque antigo de clicar com o botão direito e escolher **Abrir** não funciona
-mais: a Apple removeu esse atalho no macOS 15, e este app exige macOS 26.
+The old trick of right-clicking and choosing **Open** no longer works: Apple
+removed that bypass in macOS 15, and this app requires macOS 26.
 
-Isso não é um contorno de segurança — é o que o macOS pede para qualquer app
-fora da App Store sem conta paga de desenvolvedor. O código está todo aqui para
-você conferir, e compilar você mesmo leva menos de dez segundos.
+This isn't a security workaround — it's what macOS asks for any app distributed
+outside the App Store without a paid developer account. The code is all here for
+you to check, and building it yourself takes under ten seconds.
 
-### Do código-fonte
+### From source
 
-Não precisa de Xcode — só Command Line Tools com Swift 6.4+.
+No Xcode needed — just Command Line Tools with Swift 6.4+.
 
 ```bash
 git clone https://github.com/Ulpio/ClaudeTokenCounter.git
 cd ClaudeTokenCounter
-./Scripts/bundle.sh --install    # monta e copia para /Applications
+./Scripts/bundle.sh --install    # builds and copies to /Applications
 ```
 
-Compilar localmente também evita o passo do Gatekeeper: o `.app` que você mesmo
-montou não chega com a marca de quarentena.
+Building locally also skips the Gatekeeper step: an app you assembled yourself
+never carries the quarantine flag.
 
-Requer **macOS 26+**. O binário publicado é universal — roda em Apple Silicon e
-nos Macs Intel que ainda alcançam o macOS 26.
+Requires **macOS 26+**. The published binary is universal — it runs on Apple
+Silicon and on the Intel Macs that still reach macOS 26.
 
-## Privacidade
+## Languages
 
-O app roda inteiro na sua máquina. Não há servidor, telemetria, nem analytics.
+English and Brazilian Portuguese, following your system language. Any other
+locale falls back to English.
 
-**Leitura local:** `~/.claude/projects/**/*.jsonl` (somente leitura, para tokens
-e custo) e `~/.claude.json` (o cache de uso).
+## Privacy
 
-**Keychain:** o item `Claude Code-credentials`, que pertence ao Claude Code.
-Por padrão o app lê **apenas** o campo `rateLimitTier`, para detectar seu plano.
+The app runs entirely on your machine. No server, no telemetry, no analytics.
 
-O `accessToken` só é lido quando você liga **Ajustes → Números de uso → Buscar
-ao vivo**, e mesmo então por um único ponto do código, atrás de uma checagem
-do toggle. Com ele desligado, o campo não chega a ser extraído.
+**Local reads:** `~/.claude/projects/**/*.jsonl` (read-only, for tokens and
+cost) and `~/.claude.json` (the usage cache).
 
-O `refreshToken` **não tem leitor nenhum, em lugar nenhum do app** — e a
-garantia é estrutural, não uma promessa: o tipo `ClaudeCredentials` não tem
-campo onde guardá-lo. O app nunca renova OAuth, porque regravar o item de
-keychain do Claude Code pode invalidar a sessão dele.
+**Keychain:** the `Claude Code-credentials` item, which belongs to Claude Code.
+By default the app reads **only** the `rateLimitTier` field, to detect your plan.
 
-**Rede:** uma única chamada, `GET https://api.anthropic.com/api/oauth/usage`,
-a cada 5 minutos, e só com a busca ao vivo ligada. É a mesma chamada que o
-próprio Claude Code faz.
+The `accessToken` is read only when you turn on **Settings → Usage numbers →
+Fetch live**, and even then through a single point in the code, behind a check on
+that toggle. With it off, the field is never extracted.
 
-## Desenvolvimento
+The `refreshToken` **has no reader anywhere in the app** — and the guarantee is
+structural, not a promise: the `ClaudeCredentials` type has no field to hold it.
+The app never refreshes OAuth, because rewriting Claude Code's keychain item
+could invalidate its session.
+
+**Network:** a single call, `GET https://api.anthropic.com/api/oauth/usage`,
+every 5 minutes, and only with live fetching on. It's the same call Claude Code
+itself makes.
+
+## Development
 
 ```bash
-./Scripts/test.sh     # suíte do core (156 testes)
-./Scripts/icon.sh     # desenha o .icns, a arte do instalador, o banner e o card
-                      # social; com um caminho de captura, emoldura o screenshot
-./Scripts/release.sh  # testa, empacota, monta o DMG e publica (tem --dry-run)
-./Scripts/bundle.sh   # monta dist/ClaudeTokenCounter.app
-./Scripts/dmg.sh      # monta dist/ClaudeTokenCounter-<versão>.dmg
+./Scripts/test.sh          # core suite (178 tests) + string catalog check
+./Scripts/check-strings.sh # keys vs. catalogs, and loose literals in views
+./Scripts/icon.sh          # draws the .icns, installer art, banner and social
+                           # card; given a capture path, frames the screenshot
+./Scripts/bundle.sh        # assembles dist/ClaudeTokenCounter.app
+./Scripts/dmg.sh           # builds dist/ClaudeTokenCounter-<version>.dmg
+./Scripts/release.sh       # tests, packages, builds the DMG, publishes (--dry-run)
 ```
 
-**`swift test` puro não funciona** neste toolchain: o Command Line Tools traz o
-swift-testing mas não o conecta — o plugin de macros fica fora do plugin path e
-`Testing.framework` / `lib_TestingInterop.dylib` ficam fora do rpath do bundle
-de teste. `Scripts/test.sh` injeta os três caminhos e repassa os argumentos,
-então `./Scripts/test.sh --filter PricingTable` funciona normalmente.
+**Plain `swift test` does not work** in this toolchain: Command Line Tools ships
+swift-testing but doesn't wire it up — the macro plugin sits outside the plugin
+path, and `Testing.framework` / `lib_TestingInterop.dylib` sit outside the test
+bundle's rpath. `Scripts/test.sh` injects all three and forwards arguments, so
+`./Scripts/test.sh --filter PricingTable` works normally.
 
-Pela mesma razão o app não usa `@State`: no SDK do macOS 26 ele é uma macro do
-SwiftUI e o plugin `SwiftUIMacros` só acompanha o Xcode. O redesenho vem do
-`@Observable`, cujo plugin existe no CLT.
+For the same reason the app doesn't use `@State`: in the macOS 26 SDK it's a
+SwiftUI macro and the `SwiftUIMacros` plugin only ships with Xcode. Redraw comes
+from `@Observable`, whose plugin does exist in CLT.
 
-### Arquitetura
+Code comments are in Portuguese, by choice — it's the maintainers' language, and
+`CCUsageCore` is mostly comments explaining decisions.
 
-Dois alvos. `CCUsageCore` não importa SwiftUI — toda a lógica é testável sem
-instanciar janela.
+### Architecture
 
-A marca é um anel que se enche conforme a janela de 5h avança, e existe uma vez
-só: `GaugeGeometry`, no core, constrói o path. A barra de menu o desenha com a
-fração ao vivo, e `Scripts/icon.swift` — compilado junto com aquele mesmo
-arquivo — o congela em 62% para o ícone do app. Não é economia de código: é o
-que impede que o ícone e a barra virem dois desenhos parecidos que alguém
-precisa lembrar de manter em sincronia.
+Two targets. `CCUsageCore` doesn't import SwiftUI — all logic is testable
+without instantiating a window.
 
-A resposta ao vivo da API e o cache em `~/.claude.json` são **o mesmo payload**:
-o segundo é uma cópia gravada do primeiro. Por isso existe um decoder só
-(`UsageReportDecoder`) alimentado por duas origens, e uma função pura
-(`UsageSourcePolicy`) escolhe entre elas. Nada a jusante sabe de onde veio o
-número — exceto a linha da UI que existe para dizer.
+The live API response and the `~/.claude.json` cache are **the same payload**:
+the second is a written copy of the first. So there's one decoder
+(`UsageReportDecoder`) fed by two origins, and a pure function
+(`UsageSourcePolicy`) picks between them. Nothing downstream knows where the
+number came from — except the one UI line whose job is to say.
 
-O contrato lido é o array `limits[]`, não as chaves de topo do payload: aquelas
-são codinomes internos que giram a cada ciclo de produto, e é `limits[]` que
-traz as janelas por modelo com nome de exibição.
+The contract read is the `limits[]` array, not the payload's top-level keys:
+those are internal codenames that rotate every product cycle, and it's `limits[]`
+that carries the per-model windows with display names.
 
-Decisões de projeto estão em `docs/superpowers/specs/` e `docs/superpowers/plans/`.
+`AlertPolicy` is pure too, and takes no clock: given the same sequence of
+snapshots it produces the same alerts, which is what makes rearming and
+anti-repetition testable at all. The `Alert` type carries the fact — which
+window, what percentage — never the sentence. Wording lives in the UI target,
+alongside every other user-facing string, which is what allows localizing the app
+without localizing the core.
 
-## Créditos
+The mark is a ring that fills as the 5-hour window advances, and it exists once:
+`GaugeGeometry`, in the core, builds the path. The menu bar draws it with the
+live fraction, and `Scripts/icon.swift` — compiled against that same file —
+freezes it at 62% for the app icon.
 
-Inspirado no [CodexBar](https://github.com/steipete/CodexBar), de Peter
-Steinberger, que mostrou que o endpoint de uso existia e valia a pena.
+Design decisions live in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
 
-## Licença
+## Credits
 
-MIT — veja [LICENSE](LICENSE).
+Inspired by [CodexBar](https://github.com/steipete/CodexBar) by Peter
+Steinberger, which showed the usage endpoint existed and was worth using.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
