@@ -29,4 +29,10 @@ echo "==> Desenhando"
 echo "==> Montando o .icns"
 iconutil --convert icns "$OUT/AppIcon.iconset" --output "$OUT/AppIcon.icns"
 
+# Banner e card social entram no repo: o README aponta para o banner, e o card
+# social é enviado ao GitHub à mão nas configurações. dist/ é ignorado, então
+# ficar só lá significaria README quebrado para quem clona.
+mkdir -p "$ROOT/docs/art"
+cp "$OUT/banner.png" "$OUT/social-preview.png" "$ROOT/docs/art/"
+
 echo "==> Done: $OUT/AppIcon.icns ($(du -h "$OUT/AppIcon.icns" | cut -f1))"

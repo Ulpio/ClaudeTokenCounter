@@ -7,15 +7,25 @@ set -euo pipefail
 
 APP_NAME="ClaudeTokenCounter"
 BUNDLE_ID="com.synqo.claudetokencounter"
-VERSION="1.0.0"
+# Fonte única da versão. Com ela fixa aqui, uma tag v1.0.1 podia publicar um app
+# que se diz 1.0.0 — e o único lugar onde isso apareceria seria em "Sobre" na
+# máquina de quem instalou.
+VERSION="$(tr -d '[:space:]' < "$(dirname "${BASH_SOURCE[0]}")/../VERSION")"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
 
-echo "==> Building release binary"
-swift build -c release --package-path "$ROOT"
-BIN="$(swift build -c release --package-path "$ROOT" --show-bin-path)/$APP_NAME"
+# Universal em vez de nativo: o macOS 26 ainda roda em alguns Macs Intel, e um
+# binário só arm64 não abre neles — sem mensagem que explique o porquê. Custa
+# uns 45s a mais de build. As duas fatias saem com minos 26.0; o aviso de
+# "x86_64 deprecated" que o toolchain emite é sobre o alvo dele, não sobre o
+# binário gerado.
+ARCHS=(--arch arm64 --arch x86_64)
+
+echo "==> Building release binary (universal)"
+swift build -c release --package-path "$ROOT" "${ARCHS[@]}"
+BIN="$(swift build -c release --package-path "$ROOT" "${ARCHS[@]}" --show-bin-path)/$APP_NAME"
 
 echo "==> Generating icon"
 "$ROOT/Scripts/icon.sh" >/dev/null
@@ -46,6 +56,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# Se uma das fatias sumir, o app deixa de abrir em metade dos Macs e nada aqui
+# reclamaria — a checagem existe para transformar isso em erro de build.
+for arch in arm64 x86_64; do
+    lipo -archs "$APP/Contents/MacOS/$APP_NAME" | grep -qw "$arch" \
+        || { echo "erro: binário sem a fatia $arch" >&2; exit 1; }
+done
 
 echo "==> Ad-hoc signing"
 codesign --force --deep --sign - "$APP"

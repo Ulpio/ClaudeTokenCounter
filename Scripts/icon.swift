@@ -27,6 +27,12 @@ enum Palette {
     static let gloss = CGColor(gray: 1, alpha: 0.34)
     static let shadow = CGColor(gray: 0, alpha: 0.28)
 
+    /// Superfície escura da marca, usada no banner e no card social. Mais
+    /// funda que a do ícone de propósito: ali o verde é o objeto, aqui é o
+    /// fundo atrás de texto branco.
+    static let deepTop = CGColor(red: 0.24, green: 0.45, blue: 0.34, alpha: 1)
+    static let deepBottom = CGColor(red: 0.12, green: 0.26, blue: 0.20, alpha: 1)
+
     static let paper = CGColor(red: 0.976, green: 0.980, blue: 0.976, alpha: 1)
     static let paperEdge = CGColor(red: 0.918, green: 0.937, blue: 0.925, alpha: 1)
     static let ink = CGColor(gray: 0.13, alpha: 1)
@@ -76,6 +82,22 @@ func drawText(_ string: String, font: NSFont, color: CGColor,
 
     context.saveGState()
     context.translateBy(x: point.x - bounds.width / 2, y: point.y + bounds.height / 2)
+    context.scaleBy(x: 1, y: -1)
+    context.textPosition = .zero
+    CTLineDraw(line, context)
+    context.restoreGState()
+}
+
+/// Mesma coisa, ancorado à esquerda em vez de centrado.
+func drawText(_ string: String, font: NSFont, color: CGColor,
+              leftAt point: CGPoint, in context: CGContext) {
+    let line = CTLineCreateWithAttributedString(NSAttributedString(
+        string: string,
+        attributes: [.font: font, .foregroundColor: NSColor(cgColor: color)!]))
+    let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
+
+    context.saveGState()
+    context.translateBy(x: point.x, y: point.y + bounds.height / 2)
     context.scaleBy(x: 1, y: -1)
     context.textPosition = .zero
     CTLineDraw(line, context)
@@ -180,23 +202,33 @@ func drawIcon(side: CGFloat, in context: CGContext) {
 
     // O anel, pelo mesmo GaugeGeometry que a barra de menu usa.
     let ringSide = plate.width * (compact ? 0.68 : 0.54)
-    let ringRect = CGRect(x: plate.midX - ringSide / 2, y: plate.midY - ringSide / 2,
-                          width: ringSide, height: ringSide)
     // No compacto o traço nunca fica abaixo de 2px: menos que isso e o anel
     // deixa de ler como anel.
     let lineWidth = max(compact ? 2 : 0, ringSide * (compact ? 0.24 : 0.155))
+    drawRing(in: CGRect(x: plate.midX - ringSide / 2, y: plate.midY - ringSide / 2,
+                        width: ringSide, height: ringSide),
+             lineWidth: lineWidth, fraction: iconFraction,
+             ring: Palette.ring, track: Palette.track, in: context)
+}
 
+/// O anel isolado. Ícone, banner e card social passam por aqui — é o que faz
+/// deles a mesma marca em vez de três desenhos parecidos.
+func drawRing(in rect: CGRect, lineWidth: CGFloat, fraction: Double,
+              ring: CGColor, track: CGColor?, in context: CGContext) {
+    context.saveGState()
     context.setLineCap(.round)
     context.setLineWidth(lineWidth)
 
-    context.addPath(GaugeGeometry.trackPath(in: ringRect, lineWidth: lineWidth))
-    context.setStrokeColor(Palette.track)
-    context.strokePath()
+    if let track {
+        context.addPath(GaugeGeometry.trackPath(in: rect, lineWidth: lineWidth))
+        context.setStrokeColor(track)
+        context.strokePath()
+    }
 
-    context.addPath(GaugeGeometry.arcPath(in: ringRect, lineWidth: lineWidth,
-                                          fraction: iconFraction))
-    context.setStrokeColor(Palette.ring)
+    context.addPath(GaugeGeometry.arcPath(in: rect, lineWidth: lineWidth, fraction: fraction))
+    context.setStrokeColor(ring)
     context.strokePath()
+    context.restoreGState()
 }
 
 // MARK: - O fundo do DMG
@@ -257,12 +289,91 @@ func drawInstallerBackground(size: CGSize, scale: CGFloat, in context: CGContext
     // Rodapé com os dois requisitos que fazem o app simplesmente não abrir. É a
     // informação mais útil que cabe aqui, e o instalador é o último momento em
     // que alguém a lê antes de concluir que o app está quebrado.
-    drawText("Requer macOS 26 ou mais recente  ·  Mac com Apple Silicon",
+    drawText("Requer macOS 26 ou mais recente  ·  Intel e Apple Silicon",
              font: .systemFont(ofSize: 11, weight: .regular),
              color: CGColor(gray: 0.58, alpha: 1),
              centeredAt: CGPoint(x: rect.midX, y: 352), in: context)
 
     context.restoreGState()
+}
+
+// MARK: - Banner e card social
+
+let tagline = "Quanto do seu plano já foi consumido — e de onde veio o número."
+
+/// Fundo escuro da marca, com um anel enorme sangrando pela borda. O anel
+/// gigante é o mesmo `drawRing` — a marca aparece duas vezes, em escalas
+/// diferentes, sem virar dois desenhos.
+func drawBrandSurface(size: CGSize, watermark: CGPoint, watermarkSide: CGFloat,
+                      in context: CGContext) {
+    let rect = CGRect(origin: .zero, size: size)
+    let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+                              colors: [Palette.deepTop, Palette.deepBottom] as CFArray,
+                              locations: [0, 1])!
+    context.drawLinearGradient(gradient,
+                               start: CGPoint(x: rect.midX, y: 0),
+                               end: CGPoint(x: rect.midX, y: rect.height),
+                               options: [])
+
+    context.saveGState()
+    context.clip(to: rect)
+    drawRing(in: CGRect(x: watermark.x - watermarkSide / 2,
+                        y: watermark.y - watermarkSide / 2,
+                        width: watermarkSide, height: watermarkSide),
+             lineWidth: watermarkSide * 0.115, fraction: 1,
+             ring: CGColor(gray: 1, alpha: 0.075), track: nil, in: context)
+    context.restoreGState()
+}
+
+/// Banner do README: 1280x360, desenhado em 2x.
+func drawBanner(in context: CGContext, scale: CGFloat) {
+    let size = CGSize(width: 1280, height: 360)
+    context.saveGState()
+    context.scaleBy(x: scale, y: scale)
+
+    drawBrandSurface(size: size, watermark: CGPoint(x: 1285, y: 178),
+                     watermarkSide: 560, in: context)
+
+    drawRing(in: CGRect(x: 96, y: 116, width: 128, height: 128),
+             lineWidth: 128 * 0.155, fraction: iconFraction,
+             ring: CGColor(gray: 1, alpha: 0.97),
+             track: CGColor(gray: 1, alpha: 0.22), in: context)
+
+    drawText("Claude Token Counter", font: .systemFont(ofSize: 50, weight: .semibold),
+             color: CGColor(gray: 1, alpha: 1), leftAt: CGPoint(x: 262, y: 140), in: context)
+    drawText(tagline, font: .systemFont(ofSize: 21, weight: .regular),
+             color: CGColor(gray: 1, alpha: 0.82), leftAt: CGPoint(x: 264, y: 202), in: context)
+    drawText("macOS 26+  ·  barra de menu  ·  MIT",
+             font: .systemFont(ofSize: 15, weight: .medium),
+             color: CGColor(gray: 1, alpha: 0.5), leftAt: CGPoint(x: 264, y: 246), in: context)
+
+    context.restoreGState()
+}
+
+/// Card social do GitHub: 1280x640, o tamanho que a Open Graph espera. É o que
+/// aparece quando o link é colado no Slack, no WhatsApp ou no X — ou seja, o
+/// jeito mais provável de alguém encontrar o projeto pela primeira vez.
+func drawSocialPreview(in context: CGContext) {
+    let size = CGSize(width: 1280, height: 640)
+
+    drawBrandSurface(size: size, watermark: CGPoint(x: 1215, y: 90),
+                     watermarkSide: 620, in: context)
+
+    drawRing(in: CGRect(x: 640 - 88, y: 168, width: 176, height: 176),
+             lineWidth: 176 * 0.155, fraction: iconFraction,
+             ring: CGColor(gray: 1, alpha: 0.97),
+             track: CGColor(gray: 1, alpha: 0.22), in: context)
+
+    drawText("Claude Token Counter", font: .systemFont(ofSize: 60, weight: .semibold),
+             color: CGColor(gray: 1, alpha: 1),
+             centeredAt: CGPoint(x: size.width / 2, y: 404), in: context)
+    drawText(tagline, font: .systemFont(ofSize: 25, weight: .regular),
+             color: CGColor(gray: 1, alpha: 0.84),
+             centeredAt: CGPoint(x: size.width / 2, y: 478), in: context)
+    drawText("github.com/Ulpio/ClaudeTokenCounter",
+             font: .systemFont(ofSize: 19, weight: .medium),
+             color: CGColor(gray: 1, alpha: 0.46),
+             centeredAt: CGPoint(x: size.width / 2, y: 552), in: context)
 }
 
 /// Compartilhadas com o Scripts/dmg.sh: a arte desenha a seta entre estes dois
@@ -303,6 +414,17 @@ enum IconGen {
             drawInstallerBackground(size: installerWindow, scale: scale, in: context)
             writePNG(context, to: outputRoot.appendingPathComponent(name))
         }
+
+        // Banner em 2x: o GitHub reduz a imagem para a largura do conteúdo, e
+        // reduzir é o que preserva nitidez em tela retina. O card social vai em
+        // 1x, no tamanho exato que a Open Graph espera.
+        let banner = makeContext(width: 2560, height: 720)
+        drawBanner(in: banner, scale: 2)
+        writePNG(banner, to: outputRoot.appendingPathComponent("banner.png"))
+
+        let social = makeContext(width: 1280, height: 640)
+        drawSocialPreview(in: social)
+        writePNG(social, to: outputRoot.appendingPathComponent("social-preview.png"))
 
         print("==> arte gerada em \(outputRoot.path)")
     }

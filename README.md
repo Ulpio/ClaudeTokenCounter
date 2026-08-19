@@ -1,3 +1,5 @@
+![Claude Token Counter](docs/art/banner.png)
+
 # Claude Token Counter
 
 App de menu bar para macOS que mostra quanto do seu plano Claude Code já foi
@@ -80,7 +82,8 @@ cd ClaudeTokenCounter
 Compilar localmente também evita o passo do Gatekeeper: o `.app` que você mesmo
 montou não chega com a marca de quarentena.
 
-Requer **macOS 26+**.
+Requer **macOS 26+**. O binário publicado é universal — roda em Apple Silicon e
+nos Macs Intel que ainda alcançam o macOS 26.
 
 ## Privacidade
 
