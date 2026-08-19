@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#
+# Gera dist/AppIcon.icns e a arte do instalador.
+#
+# O gerador é compilado junto com GaugeGeometry.swift, o mesmo arquivo que o app
+# usa para desenhar o anel na barra de menu — é isso que mantém o ícone e a
+# barra sendo o mesmo desenho, e não dois parecidos.
+#
+# Uso: ./Scripts/icon.sh
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+OUT="$ROOT/dist"
+BUILD="$(mktemp -d)"
+trap 'rm -rf "$BUILD"' EXIT
+
+mkdir -p "$OUT"
+
+echo "==> Compilando o gerador"
+swiftc -O \
+    "$ROOT/Scripts/icon.swift" \
+    "$ROOT/Sources/CCUsageCore/Presentation/GaugeGeometry.swift" \
+    -o "$BUILD/icongen"
+
+echo "==> Desenhando"
+"$BUILD/icongen" "$OUT"
+
+echo "==> Montando o .icns"
+iconutil --convert icns "$OUT/AppIcon.iconset" --output "$OUT/AppIcon.icns"
+
+echo "==> Done: $OUT/AppIcon.icns ($(du -h "$OUT/AppIcon.icns" | cut -f1))"

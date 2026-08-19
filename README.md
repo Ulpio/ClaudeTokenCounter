@@ -56,7 +56,12 @@ Duas formas de liberar:
 xattr -d com.apple.quarantine /Applications/ClaudeTokenCounter.app
 ```
 
-Ou: botão direito no app → **Abrir** → **Abrir** de novo no diálogo.
+Ou, sem terminal: tente abrir, deixe o macOS bloquear, e vá em **Ajustes do
+Sistema → Privacidade e Segurança**; role até o aviso e clique em **Abrir Assim
+Mesmo**.
+
+O truque antigo de clicar com o botão direito e escolher **Abrir** não funciona
+mais: a Apple removeu esse atalho no macOS 15, e este app exige macOS 26.
 
 Isso não é um contorno de segurança — é o que o macOS pede para qualquer app
 fora da App Store sem conta paga de desenvolvedor. O código está todo aqui para
@@ -103,7 +108,8 @@ próprio Claude Code faz.
 ## Desenvolvimento
 
 ```bash
-./Scripts/test.sh     # suíte do core (141 testes)
+./Scripts/test.sh     # suíte do core (156 testes)
+./Scripts/icon.sh     # desenha dist/AppIcon.icns e a arte do instalador
 ./Scripts/bundle.sh   # monta dist/ClaudeTokenCounter.app
 ./Scripts/dmg.sh      # monta dist/ClaudeTokenCounter-<versão>.dmg
 ```
@@ -122,6 +128,13 @@ SwiftUI e o plugin `SwiftUIMacros` só acompanha o Xcode. O redesenho vem do
 
 Dois alvos. `CCUsageCore` não importa SwiftUI — toda a lógica é testável sem
 instanciar janela.
+
+A marca é um anel que se enche conforme a janela de 5h avança, e existe uma vez
+só: `GaugeGeometry`, no core, constrói o path. A barra de menu o desenha com a
+fração ao vivo, e `Scripts/icon.swift` — compilado junto com aquele mesmo
+arquivo — o congela em 62% para o ícone do app. Não é economia de código: é o
+que impede que o ícone e a barra virem dois desenhos parecidos que alguém
+precisa lembrar de manter em sincronia.
 
 A resposta ao vivo da API e o cache em `~/.claude.json` são **o mesmo payload**:
 o segundo é uma cópia gravada do primeiro. Por isso existe um decoder só

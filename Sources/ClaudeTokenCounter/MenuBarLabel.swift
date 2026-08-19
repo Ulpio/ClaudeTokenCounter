@@ -10,7 +10,7 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(nsImage: ClawdMark.menuBarImage)
+            Image(nsImage: GaugeMark.menuBarImage(fraction: snapshot.session.fraction))
                 .renderingMode(.template)
             Text(Format.percent(snapshot.session.fraction))
                 .monospacedDigit()
