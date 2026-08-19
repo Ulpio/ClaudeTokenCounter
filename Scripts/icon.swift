@@ -376,6 +376,92 @@ func drawSocialPreview(in context: CGContext) {
              centeredAt: CGPoint(x: size.width / 2, y: 552), in: context)
 }
 
+// MARK: - Moldura do screenshot
+
+/// Emoldura uma captura crua do painel para o README.
+///
+/// Uma captura de janela do macOS vem com a faixa de sombra em volta, e naquela
+/// faixa aparece o que estava atrás — outras janelas, o wallpaper. Recortar no
+/// painel resolve, mas expõe os cantos arredondados, que são translúcidos e
+/// carregam a cor do que estava atrás. Por isso a moldura: o recorte é
+/// mascarado no mesmo raio do painel e assentado sobre a superfície da marca,
+/// que é o que faz os cantos lerem como intenção em vez de sujeira.
+func frameScreenshot(rawPath: String) -> CGContext {
+    guard let image = NSImage(contentsOfFile: rawPath),
+          let source = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        fatalError("não consegui ler a captura em \(rawPath)")
+    }
+
+    let bounds = detectPanel(in: source)
+    guard let panel = source.cropping(to: bounds) else {
+        fatalError("recorte inválido: \(bounds)")
+    }
+
+    let padding: CGFloat = 64
+    let radius: CGFloat = 36
+    let size = CGSize(width: CGFloat(panel.width) + padding * 2,
+                      height: CGFloat(panel.height) + padding * 2)
+    let context = makeContext(width: Int(size.width), height: Int(size.height))
+
+    drawBrandSurface(size: size, watermark: CGPoint(x: size.width * 0.86, y: size.height * 0.12),
+                     watermarkSide: size.width * 0.72, in: context)
+
+    let frame = CGRect(x: padding, y: padding,
+                       width: CGFloat(panel.width), height: CGFloat(panel.height))
+    let rounded = CGPath(roundedRect: frame, cornerWidth: radius, cornerHeight: radius,
+                         transform: nil)
+
+    // A sombra é pintada como forma própria antes do recorte. Desenhar a imagem
+    // já clipada com sombra ligada não funciona: o clip corta a sombra junto.
+    context.saveGState()
+    context.setShadow(offset: CGSize(width: 0, height: 18), blur: 44,
+                      color: CGColor(gray: 0, alpha: 0.45))
+    context.addPath(rounded)
+    context.setFillColor(CGColor(gray: 0, alpha: 1))
+    context.fillPath()
+    context.restoreGState()
+
+    context.saveGState()
+    context.addPath(rounded)
+    context.clip()
+    // O contexto é y-para-baixo; `draw` assume y-para-cima, então a imagem sai
+    // de cabeça para baixo sem desfazer a inversão em volta dela.
+    context.translateBy(x: 0, y: frame.maxY)
+    context.scaleBy(x: 1, y: -1)
+    context.draw(panel, in: CGRect(x: frame.minX, y: 0,
+                                   width: frame.width, height: frame.height))
+    context.restoreGState()
+
+    return context
+}
+
+/// Acha o painel dentro da captura pela diferença de luminância entre ele e a
+/// faixa de sombra. Detectar em vez de fixar números deixa a moldura servir a
+/// próxima captura, que vai ter outro tamanho.
+func detectPanel(in image: CGImage) -> CGRect {
+    let w = image.width, h = image.height
+    var pixels = [UInt8](repeating: 0, count: w * h * 4)
+    let scan = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8,
+                         bytesPerRow: w * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    scan.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+    func luma(_ x: Int, _ y: Int) -> Int {
+        let i = (y * w + x) * 4
+        return (Int(pixels[i]) * 30 + Int(pixels[i + 1]) * 59 + Int(pixels[i + 2]) * 11) / 100
+    }
+    let threshold = 22
+    let midY = h / 2, midX = w / 2
+
+    var left = 0, right = w - 1, bottom = 0, top = h - 1
+    while left < w && luma(left, midY) < threshold { left += 1 }
+    while right > left && luma(right, midY) < threshold { right -= 1 }
+    while bottom < h && luma(midX, bottom) < threshold { bottom += 1 }
+    while top > bottom && luma(midX, top) < threshold { top -= 1 }
+
+    return CGRect(x: left, y: bottom, width: right - left + 1, height: top - bottom + 1)
+}
+
 /// Compartilhadas com o Scripts/dmg.sh: a arte desenha a seta entre estes dois
 /// pontos, e o Finder coloca os ícones neles.
 let installerAppCenterX: CGFloat = 172
@@ -425,6 +511,12 @@ enum IconGen {
         let social = makeContext(width: 1280, height: 640)
         drawSocialPreview(in: social)
         writePNG(social, to: outputRoot.appendingPathComponent("social-preview.png"))
+
+        // A captura crua é opcional: só quem tirou uma nova passa o caminho.
+        if CommandLine.arguments.count > 2 {
+            let framed = frameScreenshot(rawPath: CommandLine.arguments[2])
+            writePNG(framed, to: outputRoot.appendingPathComponent("panel.png"))
+        }
 
         print("==> arte gerada em \(outputRoot.path)")
     }

@@ -9,6 +9,8 @@ consumido — e, principalmente, **de onde esse número veio**.
 ◐ 81%   ← quanto da janela de 5h já foi gasto, ao vivo
 ```
 
+<img src="docs/art/panel.png" alt="Painel do app: sessão de 5h e janela semanal com horário de reset, e o valor equivalente em API de hoje, da semana e do mês" width="420">
+
 ## Por que ele existe
 
 O Claude Code guarda em `~/.claude.json` um cache com o seu consumo. Esse cache
@@ -112,7 +114,9 @@ próprio Claude Code faz.
 
 ```bash
 ./Scripts/test.sh     # suíte do core (156 testes)
-./Scripts/icon.sh     # desenha dist/AppIcon.icns e a arte do instalador
+./Scripts/icon.sh     # desenha o .icns, a arte do instalador, o banner e o card
+                      # social; com um caminho de captura, emoldura o screenshot
+./Scripts/release.sh  # testa, empacota, monta o DMG e publica (tem --dry-run)
 ./Scripts/bundle.sh   # monta dist/ClaudeTokenCounter.app
 ./Scripts/dmg.sh      # monta dist/ClaudeTokenCounter-<versão>.dmg
 ```
