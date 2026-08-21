@@ -45,7 +45,10 @@ echo "==> Testes"
 "$ROOT/Scripts/test.sh" >/dev/null
 
 echo "==> Empacotando"
-"$ROOT/Scripts/bundle.sh" >/dev/null
+# --adhoc: artefato publicado não carrega a identidade de quem cortou a
+# release. Ela não ajudaria o Gatekeeper na máquina de ninguém e deixaria o
+# e-mail do desenvolvedor legível em todo binário baixado.
+"$ROOT/Scripts/bundle.sh" --adhoc >/dev/null
 "$ROOT/Scripts/dmg.sh" >/dev/null
 
 APP="$DIST/ClaudeTokenCounter.app"

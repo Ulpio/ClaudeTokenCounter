@@ -1,9 +1,24 @@
 #!/usr/bin/env bash
 #
 # Monta dist/ClaudeTokenCounter.app a partir do binário do SwiftPM.
-# Não usa Xcode: o bundle é montado à mão e assinado ad-hoc.
+# Não usa Xcode: o bundle é montado à mão.
+#
+# Uso: ./Scripts/bundle.sh [--install] [--adhoc]
+#   --install  copia para /Applications
+#   --adhoc    ignora qualquer identidade e assina ad-hoc
 
 set -euo pipefail
+
+INSTALL=false
+ADHOC=false
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --install) INSTALL=true ;;
+        --adhoc)   ADHOC=true ;;
+        *) echo "erro: argumento desconhecido: $1" >&2; exit 1 ;;
+    esac
+    shift
+done
 
 APP_NAME="ClaudeTokenCounter"
 BUNDLE_ID="com.synqo.claudetokencounter"
@@ -76,19 +91,43 @@ for arch in arm64 x86_64; do
         || { echo "erro: binário sem a fatia $arch" >&2; exit 1; }
 done
 
-echo "==> Ad-hoc signing"
-codesign --force --deep --sign - "$APP"
+# A identidade estável existe por causa do Keychain, não do Gatekeeper. O
+# requisito designado de um app ad-hoc é o hash do binário, então cada rebuild
+# é um app diferente para o macOS e todo "Sempre Permitir" morre junto.
+# Assinado com identidade, o requisito passa a ser o bundle ID mais o
+# certificado, e sobrevive à recompilação.
+#
+# Releases saem ad-hoc de propósito, via --adhoc: a identidade não convence o
+# Gatekeeper em máquina alheia — o spctl rejeita os dois igual — e embutiria o
+# e-mail do desenvolvedor em todo binário publicado, junto no requisito
+# designado. Custo de privacidade sem ganho de instalação.
+#
+# Sem identidade no chaveiro cai em ad-hoc, senão exigir certificado quebraria
+# a promessa de buildar só com o Command Line Tools.
+SIGN_ID="-"
+SIGN_LABEL="ad-hoc"
+if ! $ADHOC; then
+    IDENTITY_LINE="$(security find-identity -v -p codesigning 2>/dev/null \
+                     | awk '/^ *[0-9]+\) [0-9A-F]+ /{print; exit}')"
+    if [ -n "$IDENTITY_LINE" ]; then
+        SIGN_ID="$(printf '%s' "$IDENTITY_LINE" | awk '{print $2}')"
+        SIGN_LABEL="$(printf '%s' "$IDENTITY_LINE" | sed 's/.*"\(.*\)"/\1/')"
+    fi
+fi
+
+echo "==> Signing ($SIGN_LABEL)"
+codesign --force --deep --sign "$SIGN_ID" "$APP"
 
 echo "==> Done: $APP"
 
 # `--install` copia para /Applications. O launch at login precisa disso: o
 # SMAppService registra um caminho, e um app que vive em dist/ tem o binário
 # trocado a cada rebuild — o login item passaria a apontar para lixo.
-if [ "${1:-}" = "--install" ]; then
+if $INSTALL; then
     TARGET="/Applications/$APP_NAME.app"
     echo "==> Installing to $TARGET"
     rm -rf "$TARGET"
     cp -R "$APP" "$TARGET"
-    codesign --force --deep --sign - "$TARGET"
+    codesign --force --deep --sign "$SIGN_ID" "$TARGET"
     echo "==> Installed: $TARGET"
 fi
