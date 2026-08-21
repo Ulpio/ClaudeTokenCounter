@@ -27,6 +27,18 @@ BUNDLE_ID="com.synqo.claudetokencounter"
 # máquina de quem instalou.
 VERSION="$(tr -d '[:space:]' < "$(dirname "${BASH_SOURCE[0]}")/../VERSION")"
 
+# CFBundleVersion carrega o commit; CFBundleShortVersionString fica com a versão
+# de marketing. É a divisão que a Apple já define para os dois campos, e sem ela
+# nenhum script consegue responder se o app instalado corresponde ao código:
+# dois builds de commits diferentes se declaram "1.2.0" igual.
+#
+# O sufixo -dirty importa: com working tree suja o commit não descreve o binário,
+# e declarar o hash limpo seria mentir sobre o que está rodando.
+BUILD_ID="$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." rev-parse --short HEAD 2>/dev/null || echo unknown)"
+if [ -n "$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." status --porcelain 2>/dev/null)" ]; then
+    BUILD_ID="$BUILD_ID-dirty"
+fi
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
@@ -75,7 +87,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
-    <key>CFBundleVersion</key><string>$VERSION</string>
+    <key>CFBundleVersion</key><string>$VERSION+$BUILD_ID</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <!-- Agent app: vive só na menu bar, sem ícone no Dock. -->
     <key>LSUIElement</key><true/>
