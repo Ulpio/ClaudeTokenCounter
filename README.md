@@ -134,10 +134,28 @@ itself makes.
 ./Scripts/check-strings.sh # keys vs. catalogs, and loose literals in views
 ./Scripts/icon.sh          # draws the .icns, installer art, banner and social
                            # card; given a capture path, frames the screenshot
-./Scripts/bundle.sh        # assembles dist/ClaudeTokenCounter.app
+./Scripts/bundle.sh        # assembles dist/ClaudeTokenCounter.app (--install)
 ./Scripts/dmg.sh           # builds dist/ClaudeTokenCounter-<version>.dmg
 ./Scripts/release.sh       # tests, packages, builds the DMG, publishes (--dry-run)
+./Scripts/update.sh        # warns when the installed app is older than the repo
 ```
+
+`bundle.sh` signs with the first code-signing identity it finds, and falls back
+to ad-hoc when there is none, so a clone without a certificate builds exactly as
+before. The identity is not about Gatekeeper, which rejects both equally: an
+ad-hoc app's designated requirement is the binary's hash, so every rebuild is a
+new app to the Keychain and every "Always Allow" dies with the previous binary.
+Signed with an identity, the requirement is the bundle ID plus the certificate,
+and it survives recompiling.
+
+Released artifacts are always ad-hoc (`release.sh` passes `--adhoc`). A
+development certificate buys no trust on someone else's machine and would embed
+the signer's email in every published binary.
+
+`CFBundleVersion` carries `<version>+<commit>`, which is what lets `update.sh`
+tell whether the app in `/Applications` matches the code. `update.sh --schedule`
+installs a daily launchd agent that notifies you when they drift apart; it never
+installs anything on its own.
 
 **Plain `swift test` does not work** in this toolchain: Command Line Tools ships
 swift-testing but doesn't wire it up — the macro plugin sits outside the plugin
