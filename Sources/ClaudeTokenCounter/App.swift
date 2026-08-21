@@ -17,6 +17,7 @@ struct ClaudeTokenCounterApp: App {
     @MainActor private static let loginItem = LoginItem()
     @MainActor private static let form = SettingsFormState()
     @MainActor private static let alerts = AlertCoordinator(settings: Self.settings)
+    @MainActor private static let panelTabs = PanelTabState()
 
     init() {
         // A varredura inicial roda em task destacada, então a menu bar aparece
@@ -44,8 +45,12 @@ struct ClaudeTokenCounterApp: App {
             UsagePanel(snapshot: Self.store.snapshot,
                        plan: Self.settings.plan,
                        canEnableLive: !Self.settings.liveUsageEnabled,
-                       onEnableLive: { Self.setLiveUsage(true) })
-                .onAppear { Self.store.panelDidOpen() }
+                       onEnableLive: { Self.setLiveUsage(true) },
+                       state: Self.panelTabs)
+                .onAppear {
+                    Self.store.panelDidOpen()
+                    Self.panelTabs.reset()
+                }
         } label: {
             MenuBarLabel(snapshot: Self.store.snapshot)
         }

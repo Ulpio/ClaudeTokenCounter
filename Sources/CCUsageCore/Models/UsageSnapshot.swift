@@ -79,6 +79,23 @@ public struct UsageSnapshot: Sendable, Equatable {
         }
     }
 
+    /// Consumo por diretório de projeto, nos mesmos três recortes da seção de
+    /// valor. Chave é o diretório cru; `""` são os eventos anteriores ao campo
+    /// existir, que a aba exibe como nota e não como item da lista.
+    public struct ProjectBreakdown: Sendable, Equatable {
+        public let today: [String: Totals]
+        public let week: [String: Totals]
+        public let month: [String: Totals]
+
+        public init(today: [String: Totals], week: [String: Totals], month: [String: Totals]) {
+            self.today = today
+            self.week = week
+            self.month = month
+        }
+
+        public static let empty = ProjectBreakdown(today: [:], week: [:], month: [:])
+    }
+
     /// Sempre presente. Sem sessão em curso vem zerado e com `resetsAt` nulo —
     /// a UI continua desenhando a barra vazia em vez de trocar de layout.
     public let session: Gauge
@@ -93,6 +110,7 @@ public struct UsageSnapshot: Sendable, Equatable {
     public let today: Totals
     public let week: Totals
     public let month: Totals
+    public let projects: ProjectBreakdown
     /// Tokens por minuto no bloco ativo; `nil` sem bloco ativo.
     public let burnRatePerMinute: Double?
     /// Nomes crus de modelos sem preço conhecido — a UI mostra quais são.
@@ -115,6 +133,7 @@ public struct UsageSnapshot: Sendable, Equatable {
     public init(
         session: Gauge, weekly: Gauge?, scopedWeekly: [ScopedGauge], weeklyPace: Pace,
         today: Totals, week: Totals, month: Totals,
+        projects: ProjectBreakdown = .empty,
         burnRatePerMinute: Double?, unknownModels: Set<String>, generatedAt: Date,
         calibratedBlockCeiling: UInt64, sourceStatus: UsageSourceStatus
     ) {
@@ -125,6 +144,7 @@ public struct UsageSnapshot: Sendable, Equatable {
         self.today = today
         self.week = week
         self.month = month
+        self.projects = projects
         self.burnRatePerMinute = burnRatePerMinute
         self.unknownModels = unknownModels
         self.generatedAt = generatedAt

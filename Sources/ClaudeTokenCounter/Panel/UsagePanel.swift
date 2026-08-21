@@ -9,13 +9,32 @@ struct UsagePanel: View {
     /// ligar é uma ação disponível.
     let canEnableLive: Bool
     let onEnableLive: () -> Void
+    let state: PanelTabState
 
     var body: some View {
         GlassEffectContainer {
             VStack(alignment: .leading, spacing: 14) {
-                sessionSection
-                valueSection
-                if !snapshot.unknownModels.isEmpty { unknownModelsNotice }
+                Picker("", selection: Bindable(state).tab) {
+                    ForEach(PanelTab.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                // Altura fixa ditada pela aba mais alta: trocar de aba nao pode
+                // fazer o painel pular de tamanho. O custo e espaco vazio em
+                // "Agora", que e a mais curta — previsibilidade vale mais que
+                // densidade aqui.
+                Group {
+                    switch state.tab {
+                    case .now:
+                        NowTab(snapshot: snapshot, plan: plan,
+                               canEnableLive: canEnableLive, onEnableLive: onEnableLive)
+                    case .projects:
+                        ProjectsTab(breakdown: snapshot.projects, state: state.projects)
+                    }
+                }
+                .frame(minHeight: 260, alignment: .top)
+
                 footer
             }
             .padding(16)
@@ -23,249 +42,7 @@ struct UsagePanel: View {
         }
     }
 
-    // MARK: - Sessão
-
-    private var sessionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("panel.section.session")
-
-            gauge(title: String(localized: "panel.gauge.current"),
-                  gauge: snapshot.session,
-                  detail: resetDetail(snapshot.session))
-
-            if let weekly = snapshot.weekly {
-                gauge(title: String(localized: "panel.gauge.weekly"), gauge: weekly, detail: resetDetail(weekly))
-            } else {
-                paceRow(snapshot.weeklyPace)
-            }
-
-            // Só as que dizem algo. Uma linha "Fable 0%" permanente é ruído: a
-            // janela existe no payload mas não informa nada.
-            ForEach(snapshot.scopedWeekly.filter { $0.gauge.isActive || $0.gauge.rawFraction > 0 },
-                    id: \.self) { scoped in
-                gauge(title: scoped.modelName,
-                      gauge: scoped.gauge,
-                      detail: resetDetail(scoped.gauge))
-            }
-
-            if let rate = snapshot.burnRatePerMinute {
-                Text(String(format: String(localized: "panel.burnRate.format"),
-                            Format.tokens(UInt64(rate))))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            provenanceRow
-        }
-        .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
-    }
-
-    /// De onde vieram os números. Substitui o rótulo binário anterior, que só
-    /// sabia dizer "oficial" ou "estimado" — e chamava de oficial um cache que
-    /// podia estar treze horas atrasado.
-    private var provenanceRow: some View {
-        let (text, icon, isWarning) = provenance
-        return HStack(spacing: 6) {
-            Label(text, systemImage: icon)
-                .font(.caption2)
-                .foregroundStyle(isWarning
-                                 ? AnyShapeStyle(UsageColor.warning)
-                                 : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
-            if offersLiveUsage {
-                Button("panel.enableLive", action: onEnableLive)
-                    .buttonStyle(.link)
-                    .font(.caption2)
-            }
-        }
-    }
-
-    /// A linha diz há muito tempo o que está errado; até aqui ela não fazia nada
-    /// a respeito. O botão aparece só onde o problema é remediável por clique.
-    ///
-    /// Credencial expirada não entra: a saída é rodar o Claude Code. Sem conexão
-    /// também não: a saída é esperar. Oferecer um botão nesses estados seria
-    /// prometer conserto que ele não faz.
-    private var offersLiveUsage: Bool {
-        guard canEnableLive else { return false }
-        switch snapshot.sourceStatus {
-        case .cached, .derivedOnly: return true
-        // Contrato irreconhecível também não: a busca ao vivo já está ligada e
-        // respondendo. Oferecer o botão sugeriria que ligar algo conserta um
-        // payload que mudou de forma.
-        case .live, .credentialExpired, .liveUnavailable, .contractUnrecognized: return false
-        }
-    }
-
-    private var provenance: (String, String, Bool) {
-        switch snapshot.sourceStatus {
-        case .live:
-            return (String(localized: "panel.provenance.live"), "bolt.horizontal.circle", false)
-        case let .cached(age):
-            // Uma hora é 20% de uma janela de 5h. Cache mais velho que isso já
-            // pode estar descrevendo uma sessão que resetou — foi exatamente o
-            // estado que mostrava 35% quando o valor real era 6%.
-            return age < 3600
-                ? (String(format: String(localized: "panel.provenance.cached.format"),
-                          Format.duration(age)), "clock", false)
-                : (String(format: String(localized: "panel.provenance.stale.format"),
-                          Format.duration(age)), "exclamationmark.triangle", true)
-        case let .credentialExpired(age):
-            return (String(format: String(localized: "panel.provenance.expired.format"),
-                           Format.duration(age)), "exclamationmark.triangle", true)
-        case let .liveUnavailable(age):
-            return (String(format: String(localized: "panel.provenance.offline.format"),
-                           Format.duration(age)), "wifi.slash", true)
-        case let .contractUnrecognized(age):
-            return (String(format: String(localized: "panel.provenance.unrecognized.format"),
-                           Format.duration(age)), "questionmark.circle", true)
-        case .derivedOnly:
-            return (String(localized: "panel.provenance.derived"), "info.circle", false)
-        }
-    }
-
-    private func resetDetail(_ gauge: UsageSnapshot.Gauge) -> String {
-        var text: String
-        if let resetsAt = gauge.resetsAt {
-            text = String(format: String(localized: "panel.reset.format"),
-                          Format.clockTime(resetsAt))
-            if let remaining = gauge.timeRemaining(at: snapshot.generatedAt) {
-                text = String(format: String(localized: "panel.reset.remaining.format"),
-                              text, Format.duration(remaining))
-            }
-        } else {
-            text = gauge.isOfficial ? "" : String(localized: "panel.reset.noSession")
-        }
-
-        // Um snapshot pode ter procedências mistas: a semanal vem do relatório
-        // oficial e a sessão cai no derivado quando o payload não traz a janela
-        // de 5h — cache antigo com `five_hour: null`, que é o estado justamente
-        // quando o cache está mais velho. A linha de procedência é uma só, do
-        // snapshot inteiro, então sem esta marca o medidor derivado apareceria
-        // sob "ao vivo", prometendo um frescor que ele não tem. O código
-        // anterior estampava a idade por medidor e não tinha esse buraco; a
-        // linha única é melhor, mas precisa disto para não mentir.
-        if gauge.provenance == .derived, snapshot.sourceStatus != .derivedOnly {
-            text = text.isEmpty
-                ? String(localized: "panel.provenance.derived")
-                : String(format: String(localized: "panel.reset.estimatedSuffix.format"), text)
-        }
-        return text
-    }
-
-    /// Sem barra, deliberadamente: barra implica um teto, e aqui não há teto a
-    /// prometer — só a comparação com o ritmo habitual.
-    private func paceRow(_ pace: Pace) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text("panel.gauge.weekly").font(.callout)
-                Spacer()
-                if let multiple = pace.multiple {
-                    Text(String(format: "%.1f×", multiple))
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(multiple >= 2 ? UsageColor.warning : .primary)
-                } else {
-                    Text(verbatim: "—").font(.callout).foregroundStyle(.secondary)
-                }
-            }
-            Text(pace.multiple == nil
-                 ? String(format: String(localized: "panel.pace.recent.format"),
-                          Format.tokens(pace.tokens))
-                 : String(format: String(localized: "panel.pace.typical.format"),
-                          Format.tokens(pace.tokens), Format.tokens(pace.typical)))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// A barra usa a fração saturada; o texto usa a bruta, para não esconder
-    /// que o consumo passou do maior já observado.
-    private func gauge(title: String, gauge g: UsageSnapshot.Gauge, detail: String) -> some View {
-        let fraction = g.fraction
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title).font(.callout)
-                Spacer()
-                Text(Format.percent(g.rawFraction))
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(g.rawFraction > 1 ? UsageColor.critical : .primary)
-            }
-            ProgressView(value: fraction)
-                .tint(UsageColor.bar(fraction))
-            if !detail.isEmpty {
-                Text(detail).font(.caption).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    // MARK: - Valor
-
-    private var valueSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("panel.section.value")
-            HStack(alignment: .top, spacing: 0) {
-                column("panel.column.today", snapshot.today)
-                column("panel.column.week", snapshot.week)
-                column("panel.column.month", snapshot.month)
-            }
-            returnRow
-        }
-        .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
-    }
-
-    /// Quanto o valor equivalente de API do mês cobre a mensalidade. Some
-    /// enquanto não há consumo: "0×" no dia 1 não informa nada.
-    @ViewBuilder
-    private var returnRow: some View {
-        if let multiple = plan.returnMultiple(forMonthly: snapshot.month.money) {
-            Divider()
-            HStack(spacing: 4) {
-                // `verbatim`: os dois pedaços já vêm localizados, e o
-                // separador não é texto a traduzir. Sem isto o SwiftUI procura
-                // uma chave "%@ · %@" que não existe.
-                Text(verbatim: "\(plan.label) · \(Format.planPrice(plan))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                // Herda o "+" do total parcial: um piso não pode ser
-                // apresentado como número exato.
-                Text(String(format: "%.1f×", multiple)
-                     + (snapshot.month.money.isPartial ? "+" : ""))
-                    .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(multiple >= 1 ? UsageColor.calm : .secondary)
-                Text("panel.return.suffix")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func column(_ title: LocalizedStringKey, _ totals: Totals) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption2).foregroundStyle(.secondary)
-            Text(Format.tokens(totals.tokens)).font(.callout.monospacedDigit())
-            Text(Format.money(totals.money))
-                .font(.callout.weight(.medium).monospacedDigit())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     // MARK: - Rodapé
-
-    private func sectionTitle(_ text: LocalizedStringKey) -> some View {
-        Text(text)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(.secondary)
-    }
-
-    private var unknownModelsNotice: some View {
-        Label(String(format: String(localized: "panel.unknownModels.format"),
-                     snapshot.unknownModels.sorted().joined(separator: ", ")),
-              systemImage: "exclamationmark.triangle")
-            .font(.caption2)
-            .foregroundStyle(.orange)
-    }
 
     private var footer: some View {
         HStack {

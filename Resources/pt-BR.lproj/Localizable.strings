@@ -1,3 +1,7 @@
+/* Painel — barra de abas */
+"panel.tab.now" = "Agora";
+"panel.tab.projects" = "Projetos";
+
 /* Painel — seções e medidores */
 "panel.section.session" = "SESSÃO";
 "panel.section.value" = "VALOR";
@@ -29,6 +33,14 @@
 "panel.reset.remaining.format" = "%1$@ · em %2$@";
 "panel.reset.noSession" = "nenhuma sessão ativa";
 "panel.reset.estimatedSuffix.format" = "%@ · estimado";
+
+/* Painel — aba de projetos */
+"panel.projects.period.today" = "Hoje";
+"panel.projects.period.week" = "Esta semana";
+"panel.projects.period.month" = "Este mês";
+"panel.projects.empty" = "Nenhum uso registrado neste período.";
+"panel.projects.unattributed.format" = "Mais %@ de antes de o app anotar a origem.";
+"panel.projects.unattributed.only.format" = "Todo o uso deste período (%@) é de antes de o app anotar a origem.";
 
 /* Formatadores */
 "format.duration.hoursMinutes" = "%1$dh %2$dm";

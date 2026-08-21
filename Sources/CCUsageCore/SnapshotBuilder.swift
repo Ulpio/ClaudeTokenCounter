@@ -31,6 +31,13 @@ public enum SnapshotBuilder {
         let month = aggregator.totals(from: events, in: aggregator.monthInterval(now: now))
         let rolling = aggregator.totals(from: events, in: aggregator.rolling7Days(now: now))
 
+        // Reaproveita os mesmos intervalos dos totais: recorte diferente faria a
+        // soma por projeto nao bater com o total exibido logo acima.
+        let projects = UsageSnapshot.ProjectBreakdown(
+            today: aggregator.totalsByProject(from: events, in: aggregator.todayInterval(now: now)),
+            week: aggregator.totalsByProject(from: events, in: aggregator.weekInterval(now: now)),
+            month: aggregator.totalsByProject(from: events, in: aggregator.monthInterval(now: now)))
+
         let active = blocks.last { $0.isActive(at: now) }
 
         // O número oficial vence sempre que existe: ele traz a fase real da
@@ -85,6 +92,7 @@ public enum SnapshotBuilder {
                 tokens: rolling.tokens,
                 typical: CeilingCalibrator.typicalWeek(events: events, now: now)),
             today: today, week: week, month: month,
+            projects: projects,
             burnRatePerMinute: burnRate,
             unknownModels: unknown,
             generatedAt: now,

@@ -44,6 +44,9 @@ run Claude Code; a network failure asks you to wait.
   priced per model *and per date*; a model with no known price never becomes
   $0.00, the total is marked partial instead
 - **Plan return multiple**: how far the month's usage covers the subscription
+- **Per-project usage**, in the Projects tab — which project spent what today,
+  this week or this month. Usage recorded before the app started noting project
+  origin shows as a footnote, and disappears as it ages out of the 90-day window.
 
 ## Alerts
 
@@ -130,7 +133,7 @@ itself makes.
 ## Development
 
 ```bash
-./Scripts/test.sh          # core suite (204 tests) + string catalog check
+./Scripts/test.sh          # core suite (216 tests) + string catalog check
 ./Scripts/check-strings.sh # keys vs. catalogs, and loose literals in views
 ./Scripts/icon.sh          # draws the .icns, installer art, banner and social
                            # card; given a capture path, frames the screenshot

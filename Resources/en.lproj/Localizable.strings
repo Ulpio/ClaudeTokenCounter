@@ -1,3 +1,7 @@
+/* Panel — tab bar */
+"panel.tab.now" = "Now";
+"panel.tab.projects" = "Projects";
+
 /* Panel — sections and gauges */
 "panel.section.session" = "SESSION";
 "panel.section.value" = "VALUE";
@@ -29,6 +33,14 @@
 "panel.reset.remaining.format" = "%1$@ · in %2$@";
 "panel.reset.noSession" = "no active session";
 "panel.reset.estimatedSuffix.format" = "%@ · estimated";
+
+/* Panel — projects tab */
+"panel.projects.period.today" = "Today";
+"panel.projects.period.week" = "This week";
+"panel.projects.period.month" = "This month";
+"panel.projects.empty" = "No usage recorded in this period.";
+"panel.projects.unattributed.format" = "%@ more from before the app recorded project origin.";
+"panel.projects.unattributed.only.format" = "All usage in this period (%@) predates project tracking.";
 
 /* Formatters */
 "format.duration.hoursMinutes" = "%1$dh %2$dm";

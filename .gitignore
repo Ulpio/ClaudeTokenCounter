@@ -15,3 +15,6 @@ dist/
 
 # Specs e planos de design (locais, nao versionados)
 docs/superpowers/
+
+# Worktrees de agente (copias completas do repo, nao versionadas)
+.claude/worktrees/
