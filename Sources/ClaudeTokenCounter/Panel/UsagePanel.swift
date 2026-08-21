@@ -90,7 +90,10 @@ struct UsagePanel: View {
         guard canEnableLive else { return false }
         switch snapshot.sourceStatus {
         case .cached, .derivedOnly: return true
-        case .live, .credentialExpired, .liveUnavailable: return false
+        // Contrato irreconhecível também não: a busca ao vivo já está ligada e
+        // respondendo. Oferecer o botão sugeriria que ligar algo conserta um
+        // payload que mudou de forma.
+        case .live, .credentialExpired, .liveUnavailable, .contractUnrecognized: return false
         }
     }
 
@@ -113,6 +116,9 @@ struct UsagePanel: View {
         case let .liveUnavailable(age):
             return (String(format: String(localized: "panel.provenance.offline.format"),
                            Format.duration(age)), "wifi.slash", true)
+        case let .contractUnrecognized(age):
+            return (String(format: String(localized: "panel.provenance.unrecognized.format"),
+                           Format.duration(age)), "questionmark.circle", true)
         case .derivedOnly:
             return (String(localized: "panel.provenance.derived"), "info.circle", false)
         }

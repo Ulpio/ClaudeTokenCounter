@@ -45,6 +45,19 @@ public struct ProjectScanner: Sendable {
 
         for url in try files(modifiedSince: since) {
             let key = url.path
+            // Componente logo abaixo da raiz, não o diretório que contém o
+            // arquivo: o Claude Code aninha sessões em subdiretórios, e o
+            // projeto é o topo daquela árvore.
+            // Symlink resolvido dos dois lados: /var é link para /private/var,
+            // e o enumerador devolve o caminho já resolvido enquanto a raiz
+            // guarda o que foi passado. Sem isso o prefixo não casa e o projeto
+            // sai vazio sem erro nenhum.
+            let base = root.resolvingSymlinksInPath().path
+            let full = url.resolvingSymlinksInPath().path
+            let project = full.hasPrefix(base + "/")
+                ? String(full.dropFirst(base.count + 1))
+                      .split(separator: "/").first.map(String.init) ?? ""
+                : ""
             let values = try? url.resourceValues(forKeys: [.fileSizeKey,
                                                            .contentModificationDateKey])
             guard let size = values?.fileSize.map(UInt64.init),
@@ -69,7 +82,8 @@ public struct ProjectScanner: Sendable {
                                    omittingEmptySubsequences: false).dropLast()
             for lineBytes in lines {
                 consumed += UInt64(lineBytes.count) + 1  // +1 pelo \n consumido
-                guard let event = JSONLParser.event(from: Data(lineBytes)) else { continue }
+                guard let event = JSONLParser.event(from: Data(lineBytes), project: project)
+            else { continue }
                 guard seen.insert(event.dedupeKey).inserted else { continue }
                 events.append(event)
             }

@@ -75,6 +75,28 @@ public struct UsageReport: Sendable, Equatable {
 
     /// Primeira entrada de cada tipo vence. Uma segunda de mesmo `kind` seria
     /// formato novo, não correção da primeira.
+    /// O payload ainda tem a forma que este app sabe ler.
+    ///
+    /// O contrato lido é o `limits[]`, não as chaves de topo — aquelas são
+    /// codinomes internos que rotacionam a cada ciclo de produto. Se o array
+    /// perder toda janela de tipo conhecido, tudo abaixo continua funcionando e
+    /// devolvendo zero: gauge vazio, mensalidade "coberta", nenhum alerta. Erro
+    /// nenhum, e um número errado com cara de número fresco.
+    ///
+    /// O critério é **algum** tipo conhecido, não a presença de `session`.
+    /// Exigir a janela de 5h assumiria que toda conta tem uma; se a suposição
+    /// estiver errada, o app acusa contrato quebrado numa conta legítima, e um
+    /// aviso que já mentiu não é lido quando passa a estar certo. Janela nova
+    /// que a Anthropic acrescente cai em `.other` sem derrubar nada.
+    public var isRecognizable: Bool {
+        limits.contains { limit in
+            switch limit.kind {
+            case .session, .weeklyAll, .weeklyScoped: return true
+            case .other: return false
+            }
+        }
+    }
+
     public var session: Limit? { limits.first { $0.kind == .session } }
     public var weeklyAll: Limit? { limits.first { $0.kind == .weeklyAll } }
     /// Na ordem do payload.

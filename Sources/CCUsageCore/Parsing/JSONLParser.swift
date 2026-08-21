@@ -70,7 +70,9 @@ public enum JSONLParser {
     /// `nil` para qualquer linha que não seja uma mensagem assistant com uso real.
     /// Linha malformada é descartada silenciosamente — um log corrompido não
     /// pode derrubar a varredura inteira.
-    public static func event(from line: Data) -> UsageEvent? {
+    /// `project` entra por parâmetro porque a linha não sabe de qual arquivo veio;
+    /// quem tem essa informação é o scanner, que caminhou até ela.
+    public static func event(from line: Data, project: String = "") -> UsageEvent? {
         guard mayContainUsage(line),
               let raw = try? decoder.decode(RawLine.self, from: line),
               raw.type == "assistant",
@@ -105,7 +107,8 @@ public enum JSONLParser {
             cacheWrite5m: write5m,
             cacheWrite1h: write1h,
             cacheRead: usage.cacheReadInputTokens ?? 0,
-            dedupeKey: "\(messageID):\(requestID)"
+            dedupeKey: "\(messageID):\(requestID)",
+            project: project
         )
     }
 }

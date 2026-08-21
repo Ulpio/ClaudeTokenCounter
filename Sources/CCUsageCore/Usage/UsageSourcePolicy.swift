@@ -11,6 +11,10 @@ public enum UsageSourceStatus: Sendable, Equatable {
     case credentialExpired(age: TimeInterval)
     /// Cache em uso porque a chamada falhou. Saída: esperar.
     case liveUnavailable(age: TimeInterval)
+    /// Cache em uso porque o payload ao vivo não tem mais a forma conhecida.
+    /// Saída: atualizar o app, ou abrir issue. Não adianta esperar nem rodar o
+    /// Claude Code — nenhuma das duas muda o formato que a API devolve.
+    case contractUnrecognized(age: TimeInterval)
     /// Nenhuma fonte oficial; o `SnapshotBuilder` segue pelo caminho derivado.
     case derivedOnly
 }
@@ -40,14 +44,27 @@ public enum UsageSourcePolicy {
         cached: UsageReport?,
         now: Date
     ) -> (source: OfficialSource?, status: UsageSourceStatus) {
+        // Sucesso de rede não é sucesso de leitura: 200 com `limits[]` vazio
+        // decodifica sem erro e produz zeros. Deixar isso vencer seria mostrar
+        // número errado com carimbo de "ao vivo".
+        var liveWasUnrecognizable = false
         if liveEnabled, case let .success(report)? = live {
-            return (OfficialSource(report: report, isLive: true), .live(at: report.fetchedAt))
+            if report.isRecognizable {
+                return (OfficialSource(report: report, isLive: true), .live(at: report.fetchedAt))
+            }
+            liveWasUnrecognizable = true
         }
 
-        guard let cached else { return (nil, .derivedOnly) }
+        // Cache irreconhecível não serve de fundo do poço: seus zeros são a
+        // mesma mentira, só que carimbada de cache.
+        guard let cached, cached.isRecognizable else { return (nil, .derivedOnly) }
         let source = OfficialSource(report: cached, isLive: false)
         // Relógio ajustado para trás não pode produzir idade negativa.
         let age = max(0, now.timeIntervalSince(cached.fetchedAt))
+
+        if liveWasUnrecognizable {
+            return (source, .contractUnrecognized(age: age))
+        }
 
         guard liveEnabled, case let .failure(error)? = live else {
             // Live desligado, ou ligado mas ainda sem resposta na primeira

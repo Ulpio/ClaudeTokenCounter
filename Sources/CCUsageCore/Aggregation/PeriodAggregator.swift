@@ -53,4 +53,25 @@ public struct PeriodAggregator: Sendable {
         }
         return totals
     }
+
+    /// O mesmo `totals`, quebrado por projeto de origem.
+    ///
+    /// Mesmo intervalo semiaberto do `totals`: divergir faria a soma das partes
+    /// não bater com o total geral na virada do período, e a diferença
+    /// apareceria como consumo que não é de ninguém.
+    ///
+    /// Projeto vazio — evento de cache gravado antes do campo existir — ganha a
+    /// própria chave em vez de ser descartado, pela mesma razão.
+    public func totalsByProject(from events: [UsageEvent],
+                                in interval: DateInterval) -> [String: Totals] {
+        var byProject: [String: Totals] = [:]
+        for event in events
+        where event.timestamp >= interval.start && event.timestamp < interval.end {
+            var totals = byProject[event.project] ?? .zero
+            totals.tokens += event.totalTokens
+            totals.money.add(cost: PricingTable.cost(of: event))
+            byProject[event.project] = totals
+        }
+        return byProject
+    }
 }

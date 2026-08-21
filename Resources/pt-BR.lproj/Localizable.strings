@@ -21,6 +21,7 @@
 "panel.provenance.stale.format" = "cache defasada · há %@";
 "panel.provenance.expired.format" = "credencial expirada · rode o Claude Code (cache de há %@)";
 "panel.provenance.offline.format" = "sem conexão · cache de há %@";
+"panel.provenance.unrecognized.format" = "formato de dados não reconhecido · atualize o app (cache de há %@)";
 "panel.provenance.derived" = "estimado do seu histórico";
 
 /* Painel — reset das janelas */

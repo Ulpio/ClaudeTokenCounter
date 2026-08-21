@@ -21,6 +21,7 @@
 "panel.provenance.stale.format" = "stale cache · %@ old";
 "panel.provenance.expired.format" = "credential expired · run Claude Code (cache %@ old)";
 "panel.provenance.offline.format" = "offline · cache %@ old";
+"panel.provenance.unrecognized.format" = "unrecognized data format · update the app (cache %@ old)";
 "panel.provenance.derived" = "estimated from your history";
 
 /* Panel — window resets */

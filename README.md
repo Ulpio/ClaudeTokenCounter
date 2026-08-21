@@ -130,7 +130,7 @@ itself makes.
 ## Development
 
 ```bash
-./Scripts/test.sh          # core suite (183 tests) + string catalog check
+./Scripts/test.sh          # core suite (204 tests) + string catalog check
 ./Scripts/check-strings.sh # keys vs. catalogs, and loose literals in views
 ./Scripts/icon.sh          # draws the .icns, installer art, banner and social
                            # card; given a capture path, frames the screenshot
